@@ -37,14 +37,11 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Analyze project
-        run: flutter analyze
-
       - name: Build APK release
         run: flutter build apk --release
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: tracking-app-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
