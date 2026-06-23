@@ -144,15 +144,8 @@ class PendingUser {
 class UserApi {
   const UserApi._();
 
-  static Uri _uri(String path, [Map<String, String>? query]) {
-    return Uri(
-      scheme: 'http',
-      host: kApiHost,
-      port: kApiPort,
-      path: path,
-      queryParameters: query,
-    );
-  }
+  static Uri _uri(String path, [Map<String, String>? query]) =>
+      apiUri(path, query);
 
   static Map<String, String> _headers({String? token}) {
     final headers = <String, String>{
