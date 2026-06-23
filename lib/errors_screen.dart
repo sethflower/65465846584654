@@ -53,7 +53,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
 
     try {
       final uri = Uri.parse(
-        'http://173.242.53.38:10000/get_errors',
+        'https://tracking-app.dclink.ua/get_errors',
       );
       final response = await http.get(
         uri,
@@ -114,7 +114,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
 
     try {
       final uri = Uri.parse(
-        'http://173.242.53.38:10000/clear_errors',
+        'https://tracking-app.dclink.ua/clear_errors',
       );
       final response = await http.delete(
         uri,
@@ -171,7 +171,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
 
     try {
       final uri = Uri.parse(
-        'http://173.242.53.38:10000/delete_error/$id',
+        'https://tracking-app.dclink.ua/delete_error/$id',
       );
       final res = await http.delete(
         uri,
