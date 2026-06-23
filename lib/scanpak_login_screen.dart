@@ -96,9 +96,9 @@ class _ScanpakLoginScreenState extends State<ScanpakLoginScreen> {
       );
     } on FormatException {
       setState(() => _loginError = 'Неправильна відповідь сервера');
-    } catch (_) {
+    } catch (e) {
       setState(
-        () => _loginError = 'Сталася непередбачена помилка. Повторіть спробу',
+        () => _loginError = 'DEBUG SCANPAK LOGIN ERROR: ${e.runtimeType}: $e',
       );
     } finally {
       if (mounted) {
