@@ -2,19 +2,13 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-const String kScanpakApiHost = 'tracking-app.dclink.ua';
-const int? kScanpakApiPort = null;
+const String kScanpakApiHost = 'tracking-api-b4jb.onrender.com';
 const String kScanpakBasePath = '/scanpak';
 
 class ScanpakAuthApi {
   const ScanpakAuthApi._();
 
-  static Uri _uri(String path) => Uri(
-        scheme: 'https',
-        host: kScanpakApiHost,
-        port: kScanpakApiPort,
-        path: '$kScanpakBasePath$path',
-      );
+  static Uri _uri(String path) => Uri.https(kScanpakApiHost, '$kScanpakBasePath$path');
 
   static Map<String, String> _headers() => const {
         'Accept': 'application/json',

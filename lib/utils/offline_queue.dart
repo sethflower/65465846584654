@@ -72,7 +72,7 @@ class OfflineQueue {
       print('🔄 Спроба синхронізувати ${pending.length} записів...');
 
       for (final record in pending) {
-        final uri = Uri.parse('https://tracking-app.dclink.ua/add_record');
+        final uri = Uri.parse('https://tracking-api-b4jb.onrender.com/add_record');
         final response = await http.post(
           uri,
           headers: {

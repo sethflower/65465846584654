@@ -129,13 +129,7 @@ class ScanpakUserApi {
   const ScanpakUserApi._();
 
   static Uri _uri(String path, [Map<String, String>? query]) {
-    return Uri(
-      scheme: 'https',
-      host: kScanpakApiHost,
-      port: kScanpakApiPort,
-      path: '$kScanpakBasePath$path',
-      queryParameters: query,
-    );
+    return Uri.https(kScanpakApiHost, '$kScanpakBasePath$path', query);
   }
 
   static Map<String, String> _headers({String? token}) {
