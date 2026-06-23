@@ -89,10 +89,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     try {
       final headers = {'Authorization': 'Bearer $token'};
       final historyUri = Uri.parse(
-        'https://tracking-api-b4jb.onrender.com/get_history',
+        'http://173.242.53.38:10000/get_history',
       );
       final errorsUri = Uri.parse(
-        'https://tracking-api-b4jb.onrender.com/get_errors',
+        'http://173.242.53.38:10000/get_errors',
       );
 
       final responses = await Future.wait([

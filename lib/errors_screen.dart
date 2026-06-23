@@ -53,7 +53,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
 
     try {
       final uri = Uri.parse(
-        'https://tracking-api-b4jb.onrender.com/get_errors',
+        'http://173.242.53.38:10000/get_errors',
       );
       final response = await http.get(
         uri,
@@ -114,7 +114,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
 
     try {
       final uri = Uri.parse(
-        'https://tracking-api-b4jb.onrender.com/clear_errors',
+        'http://173.242.53.38:10000/clear_errors',
       );
       final response = await http.delete(
         uri,
@@ -171,7 +171,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
 
     try {
       final uri = Uri.parse(
-        'https://tracking-api-b4jb.onrender.com/delete_error/$id',
+        'http://173.242.53.38:10000/delete_error/$id',
       );
       final res = await http.delete(
         uri,
