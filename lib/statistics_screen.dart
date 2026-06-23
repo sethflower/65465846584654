@@ -89,10 +89,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     try {
       final headers = {'Authorization': 'Bearer $token'};
       final historyUri = Uri.parse(
-        'http://173.242.53.38:10000/get_history',
+        'https://tracking-app.dclink.ua/get_history',
       );
       final errorsUri = Uri.parse(
-        'http://173.242.53.38:10000/get_errors',
+        'https://tracking-app.dclink.ua/get_errors',
       );
 
       final responses = await Future.wait([
