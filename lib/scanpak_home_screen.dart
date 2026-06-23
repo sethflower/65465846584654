@@ -131,12 +131,7 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
     }
 
     try {
-      final uri = Uri(
-          scheme: 'http',
-          host: kScanpakApiHost,
-          port: kScanpakApiPort,
-          path: '$kScanpakBasePath/history',
-        );
+      final uri = scanpakApiUri('/history');
       final response = await http.get(
         uri,
         headers: {
@@ -301,12 +296,7 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
       throw Exception('Немає токена авторизації');
     }
 
-    final uri = Uri(
-          scheme: 'http',
-          host: kScanpakApiHost,
-          port: kScanpakApiPort,
-          path: '$kScanpakBasePath/scans',
-        );
+    final uri = scanpakApiUri('/scans');
     final response = await http.post(
       uri,
       headers: {
