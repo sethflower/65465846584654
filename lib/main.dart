@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'login_screen.dart';
@@ -13,9 +15,26 @@ import 'admin_panel_screen.dart';
 import 'utils/offline_queue.dart'; // ✅ офлайн-очередь
 import 'utils/scanpak_offline_queue.dart';
 
+class DclinkHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    final client = super.createHttpClient(context);
+
+    client.badCertificateCallback =
+        (X509Certificate cert, String host, int port) {
+      return host == 'tracking-app.dclink.ua';
+    };
+
+    return client;
+  }
+}
+
 Future<void> main() async {
   // ✅ Обязательно инициализируем Flutter перед асинхронными вызовами
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ✅ Разрешаем проблемный сертификат только для tracking-app.dclink.ua
+  HttpOverrides.global = DclinkHttpOverrides();
 
   // ✅ Инициализация локального офлайн-хранилища
   await OfflineQueue.init();
