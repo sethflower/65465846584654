@@ -8,6 +8,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'camera_scanner_page.dart';
 import 'utils/access_utils.dart';
 import 'utils/offline_queue.dart';
+import 'utils/tracking_api.dart';
 
 // 🔊 добавили пакет для звука
 import 'package:audioplayers/audioplayers.dart';
@@ -213,11 +214,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
     try {
       if (!_isOnline || token == null) throw Exception("Offline");
 
-      final uri = Uri.parse(
-        'http://173.242.53.38:10000/add_record',
-      );
+      print('➡️ TrackingApp: надсилаємо запис ${record['boxid']} / ${record['ttn']}');
       final response = await http.post(
-        uri,
+        trackingApiUri('/add_record'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -241,9 +240,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
           }
         }
       } else {
-        throw Exception("Server error: ${response.statusCode}");
+        throw Exception("Server error: ${response.statusCode}: ${response.body}");
       }
-    } catch (_) {
+    } catch (e) {
+      print('❌ TrackingApp: не вдалося надіслати запис: $e');
       // 💾 Офлайн-сохранение
       await OfflineQueue.addRecord(record);
       await playErrorSound(); // 🔊 офлайн = ошибка
