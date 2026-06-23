@@ -2,8 +2,14 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-const String kApiHost = '173.242.53.38';
-const int kApiPort = 10000;
+const String kApiBaseUrl = 'https://tracking-app.dclink.ua';
+
+Uri apiUri(String path, [Map<String, String>? query]) {
+  return Uri.parse(kApiBaseUrl).replace(
+    path: path,
+    queryParameters: query,
+  );
+}
 
 class ApiException implements Exception {
   ApiException(this.message, this.statusCode);
