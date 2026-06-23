@@ -109,9 +109,9 @@ class _LoginScreenState extends State<LoginScreen> {
           _loginError = 'Не вдалося зʼєднатися з сервером. Повторіть спробу');
     } on FormatException {
       setState(() => _loginError = 'Неправильна відповідь сервера');
-    } catch (_) {
+    } catch (e) {
       setState(() =>
-          _loginError = 'Сталася непередбачена помилка. Повторіть спробу');
+          _loginError = 'DEBUG LOGIN ERROR: ${e.runtimeType}: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoggingIn = false);
