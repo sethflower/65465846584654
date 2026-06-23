@@ -49,7 +49,7 @@ class ScanpakOfflineQueue {
   
   static Future<bool> _hasConnection() async {
     final connectivityResult = await Connectivity().checkConnectivity();
-    return connectivityResult != ConnectivityResult.none;
+    return connectivityResult.any((result) => result != ConnectivityResult.none);
   }
 
   static Future<void> syncPending() async {
