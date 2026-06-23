@@ -76,12 +76,7 @@ class ScanpakOfflineQueue {
           continue;
         }
 
-        final uri = Uri(
-          scheme: 'http',
-          host: kScanpakApiHost,
-          port: kScanpakApiPort,
-          path: '$kScanpakBasePath/scans',
-        );
+        final uri = scanpakApiUri('/scans');
         final response = await http.post(
           uri,
           headers: {
