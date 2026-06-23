@@ -2,7 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-const String kApiHost = 'tracking-api-b4jb.onrender.com';
+const String kApiHost = '173.242.53.38';
+const int kApiPort = 10000;
 
 class ApiException implements Exception {
   ApiException(this.message, this.statusCode);
@@ -138,7 +139,13 @@ class UserApi {
   const UserApi._();
 
   static Uri _uri(String path, [Map<String, String>? query]) {
-    return Uri.https(kApiHost, path, query);
+    return Uri(
+      scheme: 'http',
+      host: kApiHost,
+      port: kApiPort,
+      path: path,
+      queryParameters: query,
+    );
   }
 
   static Map<String, String> _headers({String? token}) {
