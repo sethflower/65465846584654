@@ -128,15 +128,8 @@ class ScanpakApiException implements Exception {
 class ScanpakUserApi {
   const ScanpakUserApi._();
 
-  static Uri _uri(String path, [Map<String, String>? query]) {
-    return Uri(
-      scheme: 'http',
-      host: kScanpakApiHost,
-      port: kScanpakApiPort,
-      path: '$kScanpakBasePath$path',
-      queryParameters: query,
-    );
-  }
+  static Uri _uri(String path, [Map<String, String>? query]) =>
+      scanpakApiUri(path, query);
 
   static Map<String, String> _headers({String? token}) {
     final headers = <String, String>{
