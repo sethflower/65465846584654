@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'tracking_api.dart';
 
 /// Менеджер офлайн-очереди
 class OfflineQueue {
@@ -45,7 +46,7 @@ class OfflineQueue {
   /// Проверить, есть ли соединение
   static Future<bool> _hasConnection() async {
     final connectivityResult = await Connectivity().checkConnectivity();
-    return connectivityResult != ConnectivityResult.none;
+    return connectivityResult.any((result) => result != ConnectivityResult.none);
   }
 
   /// Отправить все накопленные записи на сервер
@@ -65,16 +66,18 @@ class OfflineQueue {
 
       if (box.isEmpty) return;
 
-      final List<Map<String, dynamic>> pending = box.values
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
+      final keys = box.keys.toList();
+      print('🔄 Спроба синхронізувати ${keys.length} записів...');
 
-      print('🔄 Спроба синхронізувати ${pending.length} записів...');
-
-      for (final record in pending) {
-        final uri = Uri.parse('https://tracking-app.dclink.ua/add_record');
+      for (final key in keys) {
+        final value = box.get(key);
+        if (value is! Map) {
+          await box.delete(key);
+          continue;
+        }
+        final record = Map<String, dynamic>.from(value);
         final response = await http.post(
-          uri,
+          trackingApiUri('/add_record'),
           headers: {
             'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',
@@ -84,13 +87,15 @@ class OfflineQueue {
 
         if (response.statusCode == 200) {
           print('✅ Синхронізовано запис: ${record['boxid']} / ${record['ttn']}');
+          await box.delete(key);
         } else {
-          print('⚠️ Не вдалося синхронізувати: ${response.statusCode}');
+          print('⚠️ Не вдалося синхронізувати: ${response.statusCode} ${response.body}');
         }
       }
 
-      await clearSynced();
-      print('🎉 Усі офлайн-записи успішно синхронізовані');
+      if (box.isEmpty) {
+        print('🎉 Усі офлайн-записи успішно синхронізовані');
+      }
     } catch (e) {
       print('❌ OfflineQueue.syncPending помилка: $e');
     }
