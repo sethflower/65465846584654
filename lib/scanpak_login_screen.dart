@@ -51,12 +51,7 @@ class _ScanpakLoginScreenState extends State<ScanpakLoginScreen> {
 
     try {
       final response = await http.post(
-        Uri(
-          scheme: 'https',
-          host: kScanpakApiHost,
-          port: kScanpakApiPort,
-          path: '$kScanpakBasePath/login',
-        ),
+        Uri.https(kScanpakApiHost, '$kScanpakBasePath/login'),
         headers: const {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
@@ -153,12 +148,7 @@ class _ScanpakLoginScreenState extends State<ScanpakLoginScreen> {
 
     try {
       final response = await http.post(
-        Uri(
-          scheme: 'https',
-          host: kScanpakApiHost,
-          port: kScanpakApiPort,
-          path: '$kScanpakBasePath/admin_login',
-        ),
+        Uri.https(kScanpakApiHost, '$kScanpakBasePath/admin_login'),
         headers: const {
           'Accept': 'application/json',
           'Content-Type': 'application/json',

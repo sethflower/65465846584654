@@ -34,11 +34,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
   Color _roleColor = Colors.grey;
   bool _isAdmin = false;
 
-  String _sanitizeNumeric(String value) {
-    final digitsOnly = value.replaceAll(RegExp(r'\D'), '');
-    return digitsOnly;
-  }
-
   late final Connectivity _connectivity;
   late final Stream<List<ConnectivityResult>> _connectivityStream;
 
@@ -136,27 +131,24 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   Future<void> _handleScannedCode(String code) async {
     final trimmed = code.trim();
-    final sanitized = _sanitizeNumeric(trimmed);
-
-    if (sanitized.isEmpty) return;
+    if (trimmed.isEmpty) return;
 
     final shouldHandleAsBox =
         _boxController.text.trim().isEmpty || _boxFocus.hasFocus;
 
     if (shouldHandleAsBox || !_ttnFocus.hasFocus) {
-      await _handleBoxSubmitted(sanitized);
+      await _handleBoxSubmitted(trimmed);
     } else {
-      await _handleTtnSubmitted(sanitized);
+      await _handleTtnSubmitted(trimmed);
     }
   }
 
   Future<void> _handleBoxSubmitted(String value) async {
     final trimmed = value.trim();
-    final sanitized = _sanitizeNumeric(trimmed);
-    if (sanitized.isEmpty) return;
+    if (trimmed.isEmpty) return;
 
     setState(() {
-      _boxController.text = sanitized;
+      _boxController.text = trimmed;
     });
 
     await playSuccessSound(); // 🔊 сигнал: BoxID принят
@@ -165,18 +157,14 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   Future<void> _handleTtnSubmitted(String value) async {
     final trimmed = value.trim();
-    final sanitized = _sanitizeNumeric(trimmed);
-    if (sanitized.isEmpty) return;
+    if (trimmed.isEmpty) return;
 
-    final sanitizedBox = _sanitizeNumeric(_boxController.text.trim());
-
-     if (sanitizedBox.isEmpty) {
+    if (_boxController.text.trim().isEmpty) {
       _boxFocus.requestFocus();
       return;
     }
 
-    _boxController.text = sanitizedBox;
-    _ttnController.text = sanitized;
+    _ttnController.text = trimmed;
     await _sendRecord();
   }
 
@@ -185,8 +173,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
     final token = prefs.getString('token');
     final userName = prefs.getString('user_name') ?? _userName;
 
-    final boxid = _sanitizeNumeric(_boxController.text.trim());
-    final ttn = _sanitizeNumeric(_ttnController.text.trim());
+    final boxid = _boxController.text.trim();
+    final ttn = _ttnController.text.trim();
 
     if (boxid.isEmpty || ttn.isEmpty) return;
 
@@ -214,7 +202,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
       if (!_isOnline || token == null) throw Exception("Offline");
 
       final uri = Uri.parse(
-        'https://tracking-app.dclink.ua/add_record',
+        'https://tracking-api-b4jb.onrender.com/add_record',
       );
       final response = await http.post(
         uri,
@@ -499,9 +487,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
                               focusNode: _boxFocus,
                               textAlign: TextAlign.center,
                               style: const TextStyle(fontSize: 20),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
                               decoration: const InputDecoration(
                                 border: OutlineInputBorder(),
                                 labelText: 'BoxID',
@@ -515,9 +500,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
                               focusNode: _ttnFocus,
                               textAlign: TextAlign.center,
                               style: const TextStyle(fontSize: 20),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
                               decoration: const InputDecoration(
                                 border: OutlineInputBorder(),
                                 labelText: 'ТТН',

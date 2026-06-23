@@ -60,7 +60,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     try {
       final uri = Uri.parse(
-        'https://tracking-app.dclink.ua/get_history',
+        'https://tracking-api-b4jb.onrender.com/get_history',
       );
       final response = await http.get(
         uri,
@@ -246,7 +246,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     try {
       final uri = Uri.parse(
-        'https://tracking-app.dclink.ua/clear_tracking',
+        'https://tracking-api-b4jb.onrender.com/clear_tracking',
       );
       final response = await http.delete(
         uri,

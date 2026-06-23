@@ -54,12 +54,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final response = await http.post(
-        Uri(
-          scheme: 'https',
-          host: kApiHost,
-          port: kApiPort,
-          path: '/login',
-        ),
+        Uri.https(kApiHost, '/login'),
         headers: const {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
@@ -228,12 +223,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final response = await http.post(
-        Uri(
-          scheme: 'https',
-          host: kApiHost,
-          port: kApiPort,
-          path: '/admin_login',
-        ),
+        Uri.https(kApiHost, '/admin_login'),
         headers: const {
           'Accept': 'application/json',
           'Content-Type': 'application/json',

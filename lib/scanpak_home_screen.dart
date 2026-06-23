@@ -1,1152 +1,565 @@
-import 'dart:async';
-import 'dart:convert';
-
-import 'package:audioplayers/audioplayers.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import 'utils/scanpak_auth.dart';
-import 'utils/scanpak_offline_queue.dart';
 import 'utils/scanpak_user_management.dart';
 
-class ScanpakHomeScreen extends StatefulWidget {
-  const ScanpakHomeScreen({super.key});
+class ScanpakAdminPanelScreen extends StatefulWidget {
+  const ScanpakAdminPanelScreen({super.key, required this.adminToken});
+
+  final String adminToken;
 
   @override
-  State<ScanpakHomeScreen> createState() => _ScanpakHomeScreenState();
+  State<ScanpakAdminPanelScreen> createState() =>
+      _ScanpakAdminPanelScreenState();
 }
 
-class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
-    with SingleTickerProviderStateMixin {
-  final TextEditingController _numberController = TextEditingController();
-  final FocusNode _numberFocus = FocusNode();
-
-  final TextEditingController _parcelFilterController = TextEditingController();
-  final TextEditingController _userFilterController = TextEditingController();
-  final TextEditingController _statsUserFilterController = TextEditingController();
-
-  DateTime? _selectedDate;
-  TimeOfDay? _startTime;
-  TimeOfDay? _endTime;
-
-  DateTime? _statsStartDate;
-  DateTime? _statsEndDate;
-
-  final AudioPlayer _audioPlayer = AudioPlayer();
-
-  late final TabController _tabController;
-  late final Connectivity _connectivity;
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
-  String? _userName;
-  ScanpakUserRole? _userRole;
-  String _status = '';
-  bool _isOnline = true;
-  bool _isLoadingHistory = false;
-  List<_ScanpakRecord> _records = const [];
-  List<_ScanpakRecord> _filteredRecords = const [];
-  List<_ScanpakRecord> _statsRecords = const [];
-  Map<String, int> _userStats = const {};
-  Map<DateTime, int> _dailyStats = const {};
-  _ScanpakRecord? _latestStatsRecord;
-  String _topUser = '—';
-  int _topUserCount = 0;
-
-  bool get _isOperator => _userRole == ScanpakUserRole.operator;
-  bool get _isAdmin => _userRole == ScanpakUserRole.admin;
+class _ScanpakAdminPanelScreenState extends State<ScanpakAdminPanelScreen> {
+  List<ScanpakPendingUser> _pendingUsers = const [];
+  List<ScanpakManagedUser> _registeredUsers = const [];
+  Map<ScanpakUserRole, String> _apiPasswords = const {};
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this)
-      ..addListener(() {
-        if (!_tabController.indexIsChanging && _tabController.index == 0) {
-          _focusInput();
-        }
-      });
-    _connectivity = Connectivity();
-    _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
-      (results) async {
-        final online =
-            results.isNotEmpty && results.first != ConnectivityResult.none;
-        if (mounted) setState(() => _isOnline = online);
-        if (online) {
-          await ScanpakOfflineQueue.syncPending();
-        }
-      },
-    );
-    _initConnectivityStatus();
-    final now = DateTime.now();
-    _statsEndDate = DateTime(now.year, now.month, now.day);
-    _statsStartDate = _statsEndDate?.subtract(const Duration(days: 6));
-    _loadUser();
-    _fetchHistory();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focusInput());
+    _loadData();
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _numberController.dispose();
-    _numberFocus.dispose();
-    _parcelFilterController.dispose();
-    _userFilterController.dispose();
-    _statsUserFilterController.dispose();
-    _connectivitySubscription?.cancel();
-    _audioPlayer.dispose();
-    super.dispose();
-  }
-
-  Future<void> _initConnectivityStatus() async {
-    final result = await _connectivity.checkConnectivity();
-    final online = result != ConnectivityResult.none;
-    if (mounted) setState(() => _isOnline = online);
-    if (online) {
-      await ScanpakOfflineQueue.syncPending();
-    }
-  }
-
-  Future<void> _loadUser() async {
-    final prefs = await SharedPreferences.getInstance();
+  Future<void> _loadData() async {
     setState(() {
-      _userName = prefs.getString('scanpak_user_name');
-      final storedRole = prefs.getString('scanpak_user_role');
-      _userRole = storedRole == null ? null : parseScanpakUserRole(storedRole);
+      _isLoading = true;
+      _errorMessage = null;
     });
-    _ensureDefaultUserFilters();
-    _applyFilters();
-    _applyStatsFilters();
-  }
-
-  Future<void> _fetchHistory() async {
-    setState(() => _isLoadingHistory = true);
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('scanpak_token');
-    if (token == null) {
-      if (mounted) Navigator.pushReplacementNamed(context, '/');
-      if (mounted) setState(() => _isLoadingHistory = false);
-      return;
-    }
 
     try {
-      final uri = Uri(
-          scheme: 'https',
-          host: kScanpakApiHost,
-          port: kScanpakApiPort,
-          path: '$kScanpakBasePath/history',
-        );
-      final response = await http.get(
-        uri,
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+      final pending = await ScanpakUserApi.fetchPendingUsers(widget.adminToken);
+      final users = await ScanpakUserApi.fetchUsers(widget.adminToken);
+      final passwords = await ScanpakUserApi.fetchRolePasswords(
+        widget.adminToken,
       );
 
-      if (response.statusCode != 200) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Не вдалося отримати історію (${response.statusCode})',
-              ),
-            ),
-          );
-        }
-        return;
-      }
+      final normalizedPasswords = <ScanpakUserRole, String>{
+        for (final role in ScanpakUserRole.values) role: passwords[role] ?? '',
+      };
 
-      final parsed = _ScanpakRecord.decodeList(response.body);
+      if (!mounted) return;
       setState(() {
-        _records = parsed;
+        _pendingUsers = pending;
+        _registeredUsers = users;
+        _apiPasswords = normalizedPasswords;
+        _isLoading = false;
       });
-      _applyFilters();
-      _applyStatsFilters();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Помилка зв’язку з сервером: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoadingHistory = false);
-    }
-  }
-
-  void _focusInput() {
-    if (_numberFocus.canRequestFocus) {
-      _numberFocus.requestFocus();
-    }
-  }
-
-  void _ensureDefaultUserFilters() {
-    if (_isOperator && _userName?.isNotEmpty == true) {
-      if (_userFilterController.text != _userName) {
-        _userFilterController.text = _userName!;
-      }
-      if (_statsUserFilterController.text != _userName) {
-        _statsUserFilterController.text = _userName!;
-      }
-      return;
-    }
-
-    if (_isAdmin) {
-      return;
-    }
-
-    if (_userName?.isNotEmpty == true) {
-      if (_userFilterController.text.isEmpty) {
-        _userFilterController.text = _userName!;
-      }
-      if (_statsUserFilterController.text.isEmpty) {
-        _statsUserFilterController.text = _userName!;
-      }
-    }
-  }
-
-  String _effectiveUserFilter(TextEditingController controller) {
-    if (_isOperator && _userName?.isNotEmpty == true) {
-      if (controller.text != _userName) {
-        controller.text = _userName!;
-      }
-      return _userName!;
-    }
-    return controller.text.trim();
-  }
-
-  String _sanitizeNumber(String value) {
-    return value.replaceAll(RegExp(r'[^0-9]'), '');
-  }
-
-  Future<void> _playSuccessSound() async {
-    try {
-      await _audioPlayer.stop();
-      await _audioPlayer.play(AssetSource('sounds/success.wav'));
+    } on ScanpakApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isLoading = false;
+      });
+      _showError(error.message);
     } catch (_) {
-      // ignore audio issues silently
-    }
-  }
-
-  void _onChanged(String value) {
-    if (_status.isNotEmpty) {
-      setState(() => _status = '');
-    }
-  }
-
-  Future<void> _handleSubmit([String? raw]) async {
-    final digits = _sanitizeNumber(raw ?? _numberController.text);
-    if (digits.isEmpty) {
-      setState(() => _status = 'Не знайшли цифр у введенні');
-      _focusInput();
-      return;
-    }
-
-    if (await _isDuplicate(digits)) {
-      setState(() => _status = 'Увага, це дублікат. Не збережено');
-      _numberController.clear();
-      _focusInput();
-      return;
-    }
-
-    setState(() => _status =
-        _isOnline ? 'Відправляємо...' : 'Немає зв’язку — збережемо локально');
-    try {
-      final record = await _sendScanToBackend(digits);
+      if (!mounted) return;
+      const fallback = 'Не вдалося завантажити дані. Спробуйте пізніше.';
       setState(() {
-        _records = <_ScanpakRecord>[record, ..._records];
-        _status =
-            'Збережено для ${record.user} о ${DateFormat('HH:mm').format(record.timestamp.toLocal())}';
+        _errorMessage = fallback;
+        _isLoading = false;
       });
-      _playSuccessSound();
-      _applyFilters();
-      _applyStatsFilters();
-    } catch (_) {
-      await ScanpakOfflineQueue.addRecord(digits);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
-          const SnackBar(
-            content: Text('Немає зв’язку або сервер недоступний. Збережено локально.'),
-          ),
-        );
-      }
-      setState(() => _status = '📦 Офлайн: номер $digits збережено локально');
-    }
-
-    await ScanpakOfflineQueue.syncPending();
-    _numberController.clear();
-    _focusInput();
-  }
-
-  Future<bool> _isDuplicate(String digits) async {
-    final alreadyScanned =
-        _records.any((existing) => existing.number.trim() == digits.trim());
-    if (alreadyScanned) return true;
-
-    return ScanpakOfflineQueue.contains(digits.trim());
-  }
-  
-  Future<_ScanpakRecord> _sendScanToBackend(String digits) async {
-    if (!_isOnline) {
-      throw Exception('Offline');
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('scanpak_token');
-    if (token == null) {
-      if (mounted) Navigator.pushReplacementNamed(context, '/');
-      throw Exception('Немає токена авторизації');
-    }
-
-    final uri = Uri(
-          scheme: 'https',
-          host: kScanpakApiHost,
-          port: kScanpakApiPort,
-          path: '$kScanpakBasePath/scans',
-        );
-    final response = await http.post(
-      uri,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({'parcel_number': digits}),
-    );
-
-    if (response.statusCode == 401) {
-      if (mounted) Navigator.pushReplacementNamed(context, '/');
-      throw Exception('Сесію завершено. Увійдіть знову');
-    }
-
-    if (response.statusCode != 200) {
-      throw Exception('Не вдалося зберегти: ${response.statusCode}');
-    }
-
-    return _ScanpakRecord.fromResponse(response.body);
-  }
-
-  void _applyFilters() {
-    _ensureDefaultUserFilters();
-    List<_ScanpakRecord> filtered = List.of(_records);
-
-    if (_parcelFilterController.text.isNotEmpty) {
-      filtered = filtered
-          .where((r) => r.number.contains(_parcelFilterController.text.trim()))
-          .toList();
-    }
-
-    final userFilter = _effectiveUserFilter(_userFilterController);
-    if (userFilter.isNotEmpty) {
-      filtered = filtered
-          .where(
-            (r) => r.user.toLowerCase().contains(
-              userFilter.toLowerCase(),
-            ),
-          )
-          .toList();
-    }
-
-    if (_selectedDate != null) {
-      filtered = filtered.where((r) {
-        final local = r.timestamp.toLocal();
-        return local.year == _selectedDate!.year &&
-            local.month == _selectedDate!.month &&
-            local.day == _selectedDate!.day;
-      }).toList();
-    }
-
-    if (_startTime != null || _endTime != null) {
-      filtered = filtered.where((r) {
-        final local = r.timestamp.toLocal();
-        final time = TimeOfDay.fromDateTime(local);
-
-        bool afterStart = true;
-        bool beforeEnd = true;
-
-        if (_startTime != null) {
-          afterStart =
-              time.hour > _startTime!.hour ||
-              (time.hour == _startTime!.hour &&
-                  time.minute >= _startTime!.minute);
-        }
-
-        if (_endTime != null) {
-          beforeEnd =
-              time.hour < _endTime!.hour ||
-              (time.hour == _endTime!.hour && time.minute <= _endTime!.minute);
-        }
-
-        return afterStart && beforeEnd;
-      }).toList();
-    }
-
-    setState(() => _filteredRecords = filtered);
-  }
-
-  void _applyStatsFilters() {
-    _ensureDefaultUserFilters();
-    List<_ScanpakRecord> filtered = List.of(_records);
-
-    final userFilter = _effectiveUserFilter(_statsUserFilterController);
-    if (userFilter.isNotEmpty) {
-      filtered = filtered
-          .where(
-            (r) => r.user.toLowerCase().contains(userFilter.toLowerCase()),
-          )
-          .toList();
-    }
-
-    if (_statsStartDate != null) {
-      final start = DateTime(
-        _statsStartDate!.year,
-        _statsStartDate!.month,
-        _statsStartDate!.day,
-      );
-      filtered = filtered
-          .where((r) => r.timestamp.toLocal().isAfter(start) ||
-              r.timestamp.toLocal().isAtSameMomentAs(start))
-          .toList();
-    }
-
-    if (_statsEndDate != null) {
-      final end = DateTime(
-        _statsEndDate!.year,
-        _statsEndDate!.month,
-        _statsEndDate!.day + 1,
-      );
-      filtered =
-          filtered.where((r) => r.timestamp.toLocal().isBefore(end)).toList();
-    }
-
-    filtered.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-    final userCounts = <String, int>{};
-    final dailyCounts = <DateTime, int>{};
-
-    for (final record in filtered) {
-      userCounts.update(record.user, (value) => value + 1, ifAbsent: () => 1);
-
-      final dateKey = DateTime(
-        record.timestamp.toLocal().year,
-        record.timestamp.toLocal().month,
-        record.timestamp.toLocal().day,
-      );
-      dailyCounts.update(dateKey, (value) => value + 1, ifAbsent: () => 1);
-    }
-
-    final topUserEntry = userCounts.entries
-        .fold<MapEntry<String, int>?>(null, (previous, element) {
-      if (previous == null || element.value > previous.value) {
-        return element;
-      }
-      return previous;
-    });
-
-    final limitedDaily = (dailyCounts.entries.toList()
-          ..sort((a, b) => b.key.compareTo(a.key)))
-        .take(7);
-
-    setState(() {
-      _statsRecords = filtered;
-      _userStats = userCounts;
-      _dailyStats = Map.fromEntries(limitedDaily);
-      _latestStatsRecord = filtered.isEmpty ? null : filtered.first;
-      _topUser = topUserEntry?.key ?? '—';
-      _topUserCount = topUserEntry?.value ?? 0;
-    });
-  }
-
-  Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate ?? now,
-      firstDate: DateTime(2024),
-      lastDate: now,
-      locale: const Locale('uk', 'UA'),
-    );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
-      _applyFilters();
+      _showError(fallback);
     }
   }
 
-  Future<void> _pickTime(bool isStart) async {
-    final now = TimeOfDay.now();
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: isStart ? (_startTime ?? now) : (_endTime ?? now),
-      helpText: isStart ? 'Початковий час' : 'Кінцевий час',
-      cancelText: 'Скасувати',
-      confirmText: 'OK',
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() {
-        if (isStart) {
-          _startTime = picked;
-        } else {
-          _endTime = picked;
-        }
-      });
-      _applyFilters();
-    }
-  }
-
-  void _clearFilters() {
-    _parcelFilterController.clear();
-    _userFilterController.text = _isOperator ? (_userName ?? '') : '';
-    _selectedDate = null;
-    _startTime = null;
-    _endTime = null;
-    _statsUserFilterController.text = _isOperator ? (_userName ?? '') : '';
-    final now = DateTime.now();
-    _statsEndDate = DateTime(now.year, now.month, now.day);
-    _statsStartDate = _statsEndDate?.subtract(const Duration(days: 6));
-    _applyFilters();
-    _applyStatsFilters();
-  }
-
-  Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('scanpak_token');
-    await prefs.remove('scanpak_user_name');
-    await prefs.remove('scanpak_user_role');
+  void _showError(String message) {
     if (!mounted) return;
-    Navigator.pushReplacementNamed(context, '/');
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('СканПак'),
+  Future<void> _approveUser(
+    ScanpakPendingUser user,
+    ScanpakUserRole role,
+  ) async {
+    try {
+      await ScanpakUserApi.approvePendingUser(
+        token: widget.adminToken,
+        requestId: user.id,
+        role: role,
+      );
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${user.surname} отримав(ла) роль "${role.label}"'),
+        ),
+      );
+    } on ScanpakApiException catch (error) {
+      _showError(error.message);
+    } catch (_) {
+      _showError('Не вдалося підтвердити користувача');
+    }
+  }
+
+  Future<void> _rejectUser(ScanpakPendingUser user) async {
+    try {
+      await ScanpakUserApi.rejectPendingUser(
+        token: widget.adminToken,
+        requestId: user.id,
+      );
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Запит від ${user.surname} відхилено')),
+      );
+    } on ScanpakApiException catch (error) {
+      _showError(error.message);
+    } catch (_) {
+      _showError('Не вдалося відхилити запит');
+    }
+  }
+
+  Future<void> _changeRole(
+    ScanpakManagedUser user,
+    ScanpakUserRole role,
+  ) async {
+    try {
+      await ScanpakUserApi.updateUser(
+        token: widget.adminToken,
+        userId: user.id,
+        role: role,
+      );
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Роль користувача ${user.surname} змінена на "${role.label}"',
+          ),
+        ),
+      );
+    } on ScanpakApiException catch (error) {
+      _showError(error.message);
+    } catch (_) {
+      _showError('Не вдалося змінити роль користувача');
+    }
+  }
+
+  Future<void> _toggleUser(ScanpakManagedUser user, bool value) async {
+    try {
+      await ScanpakUserApi.updateUser(
+        token: widget.adminToken,
+        userId: user.id,
+        isActive: value,
+      );
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            value
+                ? 'Доступ для ${user.surname} активовано'
+                : 'Доступ для ${user.surname} призупинено',
+          ),
+        ),
+      );
+    } on ScanpakApiException catch (error) {
+      _showError(error.message);
+    } catch (_) {
+      _showError('Не вдалося змінити статус користувача');
+    }
+  }
+
+  Future<void> _editApiPassword(ScanpakUserRole role) async {
+    final controller = TextEditingController(text: _apiPasswords[role] ?? '');
+
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('API пароль для ролі "${role.label}"'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(
+              labelText: 'Системний пароль',
+              helperText: 'Використовується для отримання токеа у бекенді',
+            ),
+            obscureText: true,
+          ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.logout),
-              tooltip: 'Вийти',
-              onPressed: _logout,
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Скасувати'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              child: const Text('Зберегти'),
             ),
           ],
-          bottom: TabBar(
-            controller: _tabController,
-            tabs: const [
-              Tab(text: 'Сканування'),
-              Tab(text: 'Історія'),
-              Tab(text: 'Статистика'),
-            ],
-          ),
-        ),
-        body: Column(
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              color: _isOnline ? Colors.green.shade600 : Colors.red.shade600,
-              padding: const EdgeInsets.all(6),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    _isOnline ? Icons.wifi : Icons.wifi_off,
-                    color: Colors.white,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _isOnline
-                        ? '🟢 Підключення активне'
-                        : '🔴 Немає зв’язку з сервером',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildScanTab(theme),
-                  _buildHistoryTab(theme),
-                  _buildStatsTab(theme),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
+
+    if (result == null) return;
+
+    try {
+      await ScanpakUserApi.updateRolePassword(
+        token: widget.adminToken,
+        role: role,
+        password: result,
+      );
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Пароль для ролі "${role.label}" оновлено')),
+      );
+    } on ScanpakApiException catch (error) {
+      _showError(error.message);
+    } catch (_) {
+      _showError('Не вдалося оновити пароль ролі');
+    }
   }
 
-  Widget _buildScanTab(ThemeData theme) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('Сканування відправлень', style: theme.textTheme.headlineSmall),
-          const SizedBox(height: 8),
-          Text(
-            'Відскануйте або введіть номер — після "Enter" скан зафіксується, а поле очиститься',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.grey[700],
-            ),
+  Future<void> _deleteUser(ScanpakManagedUser user) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Видалити користувача'),
+        content: Text(
+          'Обліковий запис ${user.surname} буде повністю видалено. Користувач зможе зареєструватися знову з новим паролем.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Скасувати'),
           ),
-          const SizedBox(height: 24),
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.qr_code_scanner, color: Colors.blue),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _userName == null
-                              ? 'Сканування без імені'
-                              : 'Оператор: $_userName',
-                          style: theme.textTheme.titleMedium,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _numberController,
-                    focusNode: _numberFocus,
-                    autofocus: true,
-                    keyboardType: TextInputType.text,
-                    textInputAction: TextInputAction.done,
-                    decoration: const InputDecoration(
-                      labelText: 'Номер посилки',
-                      helperText:
-                          'Відскануйте BoxID',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: _onChanged,
-                    onSubmitted: _handleSubmit,
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: () => _handleSubmit(),
-                    icon: const Icon(Icons.save),
-                    label: const Text('Зберегти скан'),
-                  ),
-                  if (_status.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      _status,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.green[700],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Видалити'),
           ),
         ],
       ),
     );
+
+    if (confirmed != true) return;
+
+    try {
+      await ScanpakUserApi.deleteUser(
+        token: widget.adminToken,
+        userId: user.id,
+      );
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Користувача ${user.surname} видалено')),
+      );
+    } on ScanpakApiException catch (error) {
+      _showError(error.message);
+    } catch (_) {
+      _showError('Не вдалося видалити користувача');
+    }
   }
 
-  Widget _buildHistoryTab(ThemeData theme) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              _filterField(_parcelFilterController, 'Номер'),
-              _filterField(
-                _userFilterController,
-                'Користувач',
-                enabled: !_isOperator,
-              ),
-              ElevatedButton.icon(
-                onPressed: _pickDate,
-                icon: const Icon(Icons.date_range),
-                label: Text(
-                  _selectedDate == null
-                      ? 'Дата'
-                      : DateFormat('dd.MM.yyyy').format(_selectedDate!),
-                ),
-              ),
-              ElevatedButton.icon(
-                onPressed: () => _pickTime(true),
-                icon: const Icon(Icons.access_time),
-                label: Text(
-                  _startTime == null ? 'Початок' : _startTime!.format(context),
-                ),
-              ),
-              ElevatedButton.icon(
-                onPressed: () => _pickTime(false),
-                icon: const Icon(Icons.timelapse),
-                label: Text(
-                  _endTime == null ? 'Кінець' : _endTime!.format(context),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: _clearFilters,
-                icon: const Icon(Icons.clear),
-                label: const Text('Скинути'),
-              ),
-              IconButton(
-                tooltip: 'Оновити',
-                onPressed: _fetchHistory,
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
+  Future<void> _revokeAccess(ScanpakManagedUser user) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Призупинити доступ'),
+        content: Text(
+          'Користувач ${user.surname} втратить можливість входу до системи. Продовжити?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Скасувати'),
           ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: _isLoadingHistory
-              ? const Center(child: CircularProgressIndicator())
-              : _filteredRecords.isEmpty
-              ? const Center(child: Text('Історія порожня'))
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _filteredRecords.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final record = _filteredRecords[index];
-                    final localTime = record.timestamp.toLocal();
-                    final date = DateFormat('dd.MM.yyyy').format(localTime);
-                    final time = DateFormat('HH:mm').format(localTime);
-
-                    return Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 1,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.inventory_2,
-                                  color: Colors.blue,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Номер: ${record.number}',
-                                    style: theme.textTheme.titleMedium,
-                                  ),
-                                ),
-                                Text(
-                                  '$date • $time',
-                                  style: theme.textTheme.labelMedium,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Користувач: ${record.user}',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: Colors.grey[700],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _filterField(
-    TextEditingController controller,
-    String label, {
-    bool enabled = true,
-    String? helperText,
-  }) {
-    return SizedBox(
-      width: 150,
-      child: TextField(
-        controller: controller,
-        onChanged: (_) => _applyFilters(),
-        enabled: enabled,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          isDense: true,
-          helperText: helperText,
-        ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Призупинити'),
+          ),
+        ],
       ),
     );
+
+    if (confirmed != true) return;
+
+    await _toggleUser(user, false);
   }
 
-  Widget _buildStatsTab(ThemeData theme) {
-    final dateRangeLabel = _statsStartDate == null && _statsEndDate == null
-        ? 'Усі дні'
-        : '${_statsStartDate == null ? '—' : DateFormat('dd.MM.yyyy').format(_statsStartDate!)} – ${_statsEndDate == null ? '—' : DateFormat('dd.MM.yyyy').format(_statsEndDate!)}';
+  Widget _buildPendingCard(ScanpakPendingUser user) {
+    ScanpakUserRole selectedRole = ScanpakUserRole.operator;
 
-    final sortedUsers = _userStats.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final sortedDaily = _dailyStats.entries.toList()
-      ..sort((a, b) => b.key.compareTo(a.key));
-
-    return _isLoadingHistory
-        ? const Center(child: CircularProgressIndicator())
-        : SingleChildScrollView(
+    return StatefulBuilder(
+      builder: (context, setInnerState) {
+        return Card(
+          child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Icon(Icons.bar_chart, color: Colors.blue),
-                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        user.surname,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
                     Text(
-                      'Статистика сканувань',
-                      style: theme.textTheme.titleLarge,
+                      _formatDate(user.createdAt),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.labelMedium?.copyWith(color: Colors.grey),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 200,
-                      child: TextField(
-                        controller: _statsUserFilterController,
-                        enabled: !_isOperator,
-                        onChanged: (_) => _applyStatsFilters(),
-                        decoration: InputDecoration(
-                          labelText: 'Користувач',
-                          helperText: _isOperator
-                              ? 'Показано лише ваші скани'
-                              : 'Введіть користувача',
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () => _pickStatsDate(isStart: true),
-                      icon: const Icon(Icons.calendar_today),
-                      label: Text(
-                        _statsStartDate == null
-                            ? 'Початок'
-                            : DateFormat('dd.MM.yyyy').format(_statsStartDate!),
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () => _pickStatsDate(isStart: false),
-                      icon: const Icon(Icons.event),
-                      label: Text(
-                        _statsEndDate == null
-                            ? 'Кінець'
-                            : DateFormat('dd.MM.yyyy').format(_statsEndDate!),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Оновити дані',
-                      onPressed: _fetchHistory,
-                      icon: const Icon(Icons.refresh),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Діапазон: $dateRangeLabel',
-                  style: theme.textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    _statCard(
-                      theme: theme,
-                      title: 'Всього сканів',
-                      value: _statsRecords.length.toString(),
-                      icon: Icons.inventory_2,
-                      color: Colors.indigo,
-                    ),
-                    _statCard(
-                      theme: theme,
-                      title: 'Унікальних користувачів',
-                      value: _userStats.length.toString(),
-                      icon: Icons.people_alt,
-                      color: Colors.teal,
-                    ),
-                    _statCard(
-                      theme: theme,
-                      title: 'Лідер',
-                      value: _topUserCount == 0
-                          ? '—'
-                          : '$_topUser ($_topUserCount)',
-                      icon: Icons.emoji_events,
-                      color: Colors.orange,
-                    ),
-                    _statCard(
-                      theme: theme,
-                      title: 'Останній скан',
-                      value: _latestStatsRecord == null
-                          ? '—'
-                          : DateFormat('dd.MM • HH:mm')
-                              .format(_latestStatsRecord!.timestamp.toLocal()),
-                      icon: Icons.access_time,
-                      color: Colors.green,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                DropdownButtonFormField<ScanpakUserRole>(
+                  initialValue: selectedRole,
+                  decoration: const InputDecoration(
+                    labelText: 'Роль користувача',
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.leaderboard, color: Colors.blue),
-                            const SizedBox(width: 8),
-                            Text(
-                              'ТОП користувачів',
-                              style: theme.textTheme.titleMedium,
-                            ),
-                          ],
+                  items: ScanpakUserRole.values
+                      .map(
+                        (role) => DropdownMenuItem<ScanpakUserRole>(
+                          value: role,
+                          child: Text(role.label),
                         ),
-                        const SizedBox(height: 8),
-                        if (sortedUsers.isEmpty)
-                          const Text('Немає даних для відображення')
-                        else
-                          Column(
-                            children: sortedUsers.take(5).map((entry) {
-                              final index = sortedUsers.indexOf(entry) + 1;
-                              return ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: CircleAvatar(
-                                  backgroundColor: Colors.blue.withOpacity(0.1),
-                                  child: Text('$index'),
-                                ),
-                                title: Text(entry.key),
-                                trailing: Text(
-                                  '${entry.value} скан.',
-                                  style: theme.textTheme.titleMedium,
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                      ],
-                    ),
-                  ),
+                      )
+                      .toList(),
+                  onChanged: (role) {
+                    if (role == null) return;
+                    setInnerState(() => selectedRole = role);
+                  },
                 ),
                 const SizedBox(height: 12),
-                Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.today, color: Colors.purple),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Активність по днях',
-                              style: theme.textTheme.titleMedium,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        if (sortedDaily.isEmpty)
-                          const Text('Сканування відсутні')
-                        else
-                          Column(
-                            children: sortedDaily.map((entry) {
-                              return ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(
-                                  DateFormat('dd.MM.yyyy').format(entry.key),
-                                ),
-                                trailing: Text(
-                                  '${entry.value} скан.',
-                                  style: theme.textTheme.titleMedium,
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                      ],
+                Text(selectedRole.description),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _approveUser(user, selectedRole),
+                        icon: const Icon(Icons.check),
+                        label: const Text('Підтвердити'),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _rejectUser(user),
+                        icon: const Icon(Icons.close),
+                        label: const Text('Відхилити'),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          );
-  }
-
-  Future<void> _pickStatsDate({required bool isStart}) async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: isStart
-          ? (_statsStartDate ?? now)
-          : (_statsEndDate ?? _statsStartDate ?? now),
-      firstDate: DateTime(2024),
-      lastDate: now,
-      locale: const Locale('uk', 'UA'),
-    );
-
-    if (picked != null) {
-      setState(() {
-        if (isStart) {
-          _statsStartDate = picked;
-        } else {
-          _statsEndDate = picked;
-        }
-      });
-      _applyStatsFilters();
-    }
-  }
-
-  Widget _statCard({
-    required ThemeData theme,
-    required String title,
-    required String value,
-    required IconData icon,
-    required MaterialColor color,
-  }) {
-    return SizedBox(
-      width: 220,
-      child: Card(
-        color: color.withOpacity(0.08),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(icon, color: color),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: theme.textTheme.titleMedium,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                value,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  color: color.shade700,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
           ),
+        );
+      },
+    );
+  }
+
+  Widget _buildUserCard(ScanpakManagedUser user) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    user.surname,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Switch.adaptive(
+                      value: user.isActive,
+                      onChanged: (value) => _toggleUser(user, value),
+                    ),
+                    PopupMenuButton<_UserMenuAction>(
+                      tooltip: 'Додаткові дії',
+                      onSelected: (action) {
+                        switch (action) {
+                          case _UserMenuAction.revoke:
+                            _revokeAccess(user);
+                            break;
+                          case _UserMenuAction.delete:
+                            _deleteUser(user);
+                            break;
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: _UserMenuAction.revoke,
+                          child: Text('Призупинити доступ'),
+                        ),
+                        PopupMenuItem(
+                          value: _UserMenuAction.delete,
+                          child: Text('Видалити'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.verified_user, size: 16),
+                const SizedBox(width: 6),
+                Text('Роль: ${user.role.label}'),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.check_circle_outline, size: 16),
+                const SizedBox(width: 6),
+                Text(user.isActive ? 'Активний' : 'Деактивований'),
+              ],
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<ScanpakUserRole>(
+              initialValue: user.role,
+              decoration: const InputDecoration(labelText: 'Змінити роль'),
+              items: ScanpakUserRole.values
+                  .map(
+                    (role) => DropdownMenuItem<ScanpakUserRole>(
+                      value: role,
+                      child: Text(role.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (role) {
+                if (role == null) return;
+                _changeRole(user, role);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
         ),
       ),
     );
   }
+
+  Widget _buildPasswordsCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Системні паролі',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Використовуються для входу за рольовим паролем. Оновіть їх за потреби.',
+            ),
+            const SizedBox(height: 12),
+            ...ScanpakUserRole.values.map(
+              (role) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(role.label),
+                subtitle: Text(role.description),
+                trailing: ElevatedButton(
+                  onPressed: () => _editApiPassword(role),
+                  child: const Text('Змінити пароль'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
+            const SizedBox(height: 12),
+            Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: _loadData,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Повторити спробу'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (_pendingUsers.isNotEmpty) ...[
+            Text(
+              'Запити на реєстрацію',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 12),
+            ..._pendingUsers.map(_buildPendingCard),
+            const SizedBox(height: 24),
+          ],
+          Text('Користувачі', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          if (_registeredUsers.isEmpty)
+            const Text('Поки що немає користувачів')
+          else
+            ..._registeredUsers.map(_buildUserCard),
+          const SizedBox(height: 24),
+          _buildPasswordsCard(),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Адмін панель СканПак'),
+        actions: [
+          IconButton(
+            tooltip: 'Оновити',
+            onPressed: _loadData,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: _buildBody(),
+    );
+  }
 }
 
-class _ScanpakRecord {
-  const _ScanpakRecord({
-    required this.number,
-    required this.user,
-    required this.timestamp,
-  });
+enum _UserMenuAction { revoke, delete }
 
-  final String number;
-  final String user;
-  final DateTime timestamp;
-
-  static _ScanpakRecord fromJson(Map<String, dynamic> map) {
-    final number = map['parcel_number']?.toString() ?? '';
-    final user = map['username']?.toString() ?? '';
-    final timestampRaw = map['scanned_at']?.toString() ?? '';
-    final timestamp = _parseTimestamp(timestampRaw);
-    if (number.isEmpty) {
-      throw const FormatException('Некоректні дані сканування');
-    }
-    return _ScanpakRecord(number: number, user: user, timestamp: timestamp);
-  }
-
-  static DateTime _parseTimestamp(String raw) {
-    final parsed = DateTime.tryParse(raw.trim());
-    if (parsed == null) {
-      throw const FormatException('Некоректні дані сканування');
-    }
-
-    final hasTimezone =
-        RegExp(r'(Z|[+-]\d{2}:?\d{2})$').hasMatch(raw.trim());
-    final utcTime = hasTimezone
-        ? parsed.toUtc()
-        : DateTime.utc(
-            parsed.year,
-            parsed.month,
-            parsed.day,
-            parsed.hour,
-            parsed.minute,
-            parsed.second,
-            parsed.millisecond,
-            parsed.microsecond,
-          );
-
-    return utcTime.toLocal();
-  }
-
-  static _ScanpakRecord fromResponse(String raw) {
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Некоректна відповідь сервера');
-    }
-    return fromJson(decoded);
-  }
-
-  static List<_ScanpakRecord> decodeList(String raw) {
-    final decoded = jsonDecode(raw);
-    if (decoded is! List) return const [];
-    return decoded
-        .whereType<Map<String, dynamic>>()
-        .map(_ScanpakRecord.fromJson)
-        .toList();
-  }
+String _formatDate(DateTime date) {
+  return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
 }
