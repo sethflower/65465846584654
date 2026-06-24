@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'login_screen.dart';
 import 'scanner_screen.dart';
 import 'start_screen.dart';
@@ -11,7 +13,6 @@ import 'username_screen.dart';
 import 'history_screen.dart';
 import 'errors_screen.dart';
 import 'statistics_screen.dart';
-import 'app_design.dart';
 import 'admin_panel_screen.dart';
 import 'utils/offline_queue.dart'; // ✅ офлайн-очередь
 import 'utils/scanpak_offline_queue.dart';
@@ -45,6 +46,64 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
+class SessionGate extends StatefulWidget {
+  const SessionGate({super.key});
+
+  @override
+  State<SessionGate> createState() => _SessionGateState();
+}
+
+class _SessionGateState extends State<SessionGate> {
+  @override
+  void initState() {
+    super.initState();
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final trackingToken = prefs.getString('token');
+    final scanpakToken = prefs.getString('scanpak_token');
+    final lastModule = prefs.getString('last_module');
+
+    String targetRoute = '/start';
+
+    final hasTrackingSession =
+        trackingToken != null && trackingToken.trim().isNotEmpty;
+    final hasScanpakSession =
+        scanpakToken != null && scanpakToken.trim().isNotEmpty;
+
+    if (lastModule == 'tracking' && hasTrackingSession) {
+      targetRoute = '/scanner';
+    } else if (lastModule == 'scanpak' && hasScanpakSession) {
+      targetRoute = '/scanpak/home';
+    } else if (hasTrackingSession && !hasScanpakSession) {
+      targetRoute = '/scanner';
+    } else if (hasScanpakSession && !hasTrackingSession) {
+      targetRoute = '/scanpak/home';
+    } else {
+      targetRoute = '/start';
+    }
+
+    if (!mounted) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, targetRoute);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -53,7 +112,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'TrackingApp',
-      theme: CorporateTheme.light(),
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
 
       // ✅ Локализация — для корректного отображения дат и кнопок
       localizationsDelegates: const [
@@ -63,10 +122,11 @@ class MyApp extends StatelessWidget {
       ],
       supportedLocales: const [Locale('uk', 'UA'), Locale('en', 'US')],
 
-      // ✅ Маршруты приложения
+      // ✅ При запуске сначала проверяем сохранённую сессию
       initialRoute: '/',
       routes: {
-        '/': (context) => const StartScreen(),
+        '/': (context) => const SessionGate(),
+        '/start': (context) => const StartScreen(),
         '/login': (context) => const LoginScreen(),
         '/username': (context) => UserNameScreen(),
         '/scanner': (context) => const ScannerScreen(),

@@ -18,13 +18,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   bool _isLoading = false;
   Map<String, dynamic> _accessInfo = {};
 
-  // --- фильтры ---
+  // --- фильтры (только BoxID и TTN) ---
   final TextEditingController _boxidController = TextEditingController();
   final TextEditingController _ttnController = TextEditingController();
-  final TextEditingController _userController = TextEditingController();
-  DateTime? _selectedDate;
-  TimeOfDay? _startTime;
-  TimeOfDay? _endTime;
 
   @override
   void initState() {
@@ -33,12 +29,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
     _fetchHistory();
   }
 
+  @override
+  void dispose() {
+    _boxidController.dispose();
+    _ttnController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadAccess() async {
     final info = await getUserAccessInfo();
     setState(() => _accessInfo = info);
   }
 
-  /// Форматує дату/час у локальну зону пристрою (Київ, якщо вона вибрана)
+  /// Форматує дату/час у локальну зону пристрою
   String formatDate(String isoString) {
     try {
       final localDate = DateTime.parse(isoString).toLocal();
@@ -59,9 +62,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
 
     try {
-      final uri = Uri.parse(
-        'https://tracking-app.dclink.ua/get_history',
-      );
+      final uri = Uri.parse('https://tracking-app.dclink.ua/get_history');
       final response = await http.get(
         uri,
         headers: {'Authorization': 'Bearer $token'},
@@ -77,22 +78,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
         setState(() {
           _records = data;
         });
-        _applyFilters(); // сразу применяем фильтры
+        _applyFilters();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Помилка сервера: ${response.statusCode}')),
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Помилка зв’язку з сервером: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Помилка зв’язку з сервером: $e')),
+      );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  /// применяем фильтры локально
+  /// применяем фильтры локально (только BoxID и TTN)
   void _applyFilters() {
     List<dynamic> filtered = List.from(_records);
 
@@ -112,110 +113,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
           .toList();
     }
 
-    if (_userController.text.isNotEmpty) {
-      filtered = filtered
-          .where(
-            (r) => r['user_name'].toString().toLowerCase().contains(
-              _userController.text.trim().toLowerCase(),
-            ),
-          )
-          .toList();
-    }
-
-    if (_selectedDate != null) {
-      filtered = filtered.where((r) {
-        final dt = DateTime.tryParse(r['datetime'] ?? '');
-        if (dt == null) return false;
-        final localDt = dt.toLocal();
-        return localDt.year == _selectedDate!.year &&
-            localDt.month == _selectedDate!.month &&
-            localDt.day == _selectedDate!.day;
-      }).toList();
-    }
-
-    if (_startTime != null || _endTime != null) {
-      filtered = filtered.where((r) {
-        final dt = DateTime.tryParse(r['datetime'] ?? '');
-        if (dt == null) return false;
-        final localDt = dt.toLocal();
-        final time = TimeOfDay.fromDateTime(localDt);
-
-        bool afterStart = true;
-        bool beforeEnd = true;
-
-        if (_startTime != null) {
-          afterStart =
-              time.hour > _startTime!.hour ||
-              (time.hour == _startTime!.hour &&
-                  time.minute >= _startTime!.minute);
-        }
-
-        if (_endTime != null) {
-          beforeEnd =
-              time.hour < _endTime!.hour ||
-              (time.hour == _endTime!.hour && time.minute <= _endTime!.minute);
-        }
-
-        return afterStart && beforeEnd;
-      }).toList();
-    }
-
     setState(() {
       _filteredRecords = filtered;
     });
   }
 
-  /// выбор даты
-  Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate ?? now,
-      firstDate: DateTime(2023),
-      lastDate: now,
-      locale: const Locale('uk', 'UA'),
-    );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
-      _applyFilters();
-    }
-  }
-
-  /// выбор времени (24-часовой)
-  Future<void> _pickTime(bool isStart) async {
-    final now = TimeOfDay.now();
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: isStart ? (_startTime ?? now) : (_endTime ?? now),
-      helpText: isStart ? 'Початковий час' : 'Кінцевий час',
-      cancelText: 'Скасувати',
-      confirmText: 'OK',
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() {
-        if (isStart) {
-          _startTime = picked;
-        } else {
-          _endTime = picked;
-        }
-      });
-      _applyFilters();
-    }
-  }
-
   void _clearFilters() {
     _boxidController.clear();
     _ttnController.clear();
-    _userController.clear();
-    _selectedDate = null;
-    _startTime = null;
-    _endTime = null;
     _applyFilters();
   }
 
@@ -223,6 +128,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Очистити історію?'),
         content: const Text('Ця дія видалить усі записи історії. Ви впевнені?'),
         actions: [
@@ -245,9 +152,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final token = prefs.getString('token');
 
     try {
-      final uri = Uri.parse(
-        'https://tracking-app.dclink.ua/clear_tracking',
-      );
+      final uri = Uri.parse('https://tracking-app.dclink.ua/clear_tracking');
       final response = await http.delete(
         uri,
         headers: {'Authorization': 'Bearer $token'},
@@ -257,9 +162,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
           _records.clear();
           _filteredRecords.clear();
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Історію очищено ✅')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Історію очищено ✅')),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -272,17 +177,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
         const SnackBar(content: Text('Помилка зв’язку з сервером')),
       );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final hasActiveFilter =
+        _boxidController.text.isNotEmpty || _ttnController.text.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Історія сканувань'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchHistory),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Оновити',
+            onPressed: _fetchHistory,
+          ),
           if (_accessInfo['canClearHistory'] == true)
             IconButton(
               icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
@@ -294,146 +206,268 @@ class _HistoryScreenState extends State<HistoryScreen> {
       backgroundColor: const Color(0xFFF7F8FA),
       body: Column(
         children: [
+          // ── Панель фільтрів ──
           Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            child: Row(
               children: [
-                _filterField(_boxidController, 'BoxID'),
-                _filterField(_ttnController, 'TTN'),
-                _filterField(_userController, 'Користувач'),
-                ElevatedButton.icon(
-                  onPressed: _pickDate,
-                  icon: const Icon(Icons.date_range),
-                  label: Text(
-                    _selectedDate == null
-                        ? 'Дата'
-                        : DateFormat('dd.MM.yyyy').format(_selectedDate!),
+                Expanded(
+                  child: _filterField(
+                    _boxidController,
+                    'BoxID',
+                    Icons.inventory_2_outlined,
                   ),
                 ),
-                ElevatedButton.icon(
-                  onPressed: () => _pickTime(true),
-                  icon: const Icon(Icons.access_time),
-                  label: Text(
-                    _startTime == null
-                        ? 'Початок'
-                        : _startTime!.format(context),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _filterField(
+                    _ttnController,
+                    'TTN',
+                    Icons.local_shipping_outlined,
                   ),
                 ),
-                ElevatedButton.icon(
-                  onPressed: () => _pickTime(false),
-                  icon: const Icon(Icons.timelapse),
-                  label: Text(
-                    _endTime == null ? 'Кінець' : _endTime!.format(context),
+                if (hasActiveFilter) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    onPressed: _clearFilters,
+                    icon: const Icon(Icons.clear),
+                    tooltip: 'Скинути фільтри',
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.blueGrey,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
-                ),
-                TextButton.icon(
-                  onPressed: _clearFilters,
-                  icon: const Icon(Icons.clear),
-                  label: const Text('Скинути'),
-                ),
+                ],
               ],
             ),
           ),
+
+          // ── Лічильник ──
+          if (!_isLoading)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Знайдено записів: ${_filteredRecords.length}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+
           const Divider(height: 1),
+
+          // ── Список ──
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredRecords.isEmpty
-                ? const Center(child: Text('Історія порожня'))
-                : ListView.builder(
-                    itemCount: _filteredRecords.length,
-                    itemBuilder: (context, index) {
-                      final item = _filteredRecords[index];
-                      final hasError =
-                          item['note'] != null &&
-                          item['note'].toString().isNotEmpty;
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        color: hasError
-                            ? const Color(0xFFFFEBEE)
-                            : Colors.white,
-                        elevation: 2,
-                        child: ListTile(
-                          leading: const Icon(Icons.qr_code_2),
-                          title: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.inventory_2,
-                                    color: Colors.blueGrey,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'BoxID: ${item['boxid']}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.inbox_outlined,
+                                size: 56, color: Colors.grey.shade400),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Історія порожня',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.w500,
                               ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.local_shipping,
-                                    color: Colors.teal,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text('TTN: ${item['ttn']}'),
-                                ],
-                              ),
-                            ],
-                          ),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('👤 ${item['user_name']}'),
-                                Text('🕓 ${formatDate(item['datetime'])}'),
-                                if (hasError)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      item['note'],
-                                      style: const TextStyle(
-                                        color: Colors.redAccent,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                              ],
                             ),
-                          ),
+                          ],
                         ),
-                      );
-                    },
-                  ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _fetchHistory,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(12, 6, 12, 16),
+                          itemCount: _filteredRecords.length,
+                          itemBuilder: (context, index) {
+                            final item = _filteredRecords[index];
+                            final hasError = item['note'] != null &&
+                                item['note'].toString().isNotEmpty;
+                            return _historyCard(item, hasError);
+                          },
+                        ),
+                      ),
           ),
         ],
       ),
     );
   }
 
-  Widget _filterField(TextEditingController controller, String label) {
-    return SizedBox(
-      width: 150,
-      child: TextField(
-        controller: controller,
-        onChanged: (_) => _applyFilters(),
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          isDense: true,
+  // ── Карточка запису ──
+  Widget _historyCard(dynamic item, bool hasError) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: hasError ? const Color(0xFFFFF1F1) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: hasError
+              ? Colors.redAccent.withOpacity(0.35)
+              : Colors.grey.withOpacity(0.15),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // BoxID — повний, на всю ширину
+            _infoRow(
+              icon: Icons.inventory_2,
+              iconColor: Colors.blueGrey,
+              label: 'BoxID',
+              value: '${item['boxid'] ?? '—'}',
+              bold: true,
+            ),
+            const SizedBox(height: 8),
+            // TTN — повний, на всю ширину
+            _infoRow(
+              icon: Icons.local_shipping,
+              iconColor: Colors.teal,
+              label: 'TTN',
+              value: '${item['ttn'] ?? '—'}',
+            ),
+            const Divider(height: 20),
+            // Користувач
+            _infoRow(
+              icon: Icons.person_outline,
+              iconColor: Colors.indigo,
+              label: 'Користувач',
+              value: '${item['user_name'] ?? '—'}',
+              compact: true,
+            ),
+            const SizedBox(height: 6),
+            // Дата/час
+            _infoRow(
+              icon: Icons.access_time,
+              iconColor: Colors.deepPurple,
+              label: 'Час',
+              value: formatDate(item['datetime'] ?? ''),
+              compact: true,
+            ),
+            // Примітка/помилка
+            if (hasError) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.error_outline,
+                        size: 18, color: Colors.redAccent),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        item['note'].toString(),
+                        style: const TextStyle(
+                          color: Colors.redAccent,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Рядок інформації (текст не обрізається — переноситься) ──
+  Widget _infoRow({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required String value,
+    bool bold = false,
+    bool compact = false,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: iconColor, size: compact ? 17 : 19),
+        const SizedBox(width: 8),
+        Text(
+          '$label: ',
+          style: TextStyle(
+            fontSize: compact ? 13 : 14,
+            color: Colors.grey.shade600,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        Expanded(
+          child: SelectableText(
+            value,
+            style: TextStyle(
+              fontSize: compact ? 13.5 : 15,
+              fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+              color: const Color(0xFF1A2233),
+              height: 1.25,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Поле фільтра ──
+  Widget _filterField(
+    TextEditingController controller,
+    String label,
+    IconData icon,
+  ) {
+    return TextField(
+      controller: controller,
+      onChanged: (_) => _applyFilters(),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, size: 20),
+        isDense: true,
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.withOpacity(0.25)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.teal, width: 1.6),
         ),
       ),
     );

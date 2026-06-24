@@ -1,10 +1,9 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-
-import 'app_design.dart';
 
 import 'scanpak_admin_panel_screen.dart';
 import 'utils/scanpak_auth.dart';
@@ -19,8 +18,7 @@ class ScanpakLoginScreen extends StatefulWidget {
 
 class _ScanpakLoginScreenState extends State<ScanpakLoginScreen> {
   final TextEditingController _loginSurnameController = TextEditingController();
-  final TextEditingController _loginPasswordController =
-      TextEditingController();
+  final TextEditingController _loginPasswordController = TextEditingController();
   final TextEditingController _registerSurnameController =
       TextEditingController();
   final TextEditingController _registerPasswordController =
@@ -88,6 +86,7 @@ class _ScanpakLoginScreenState extends State<ScanpakLoginScreen> {
       if (role != null) {
         await prefs.setString('scanpak_user_role', role.name);
       }
+      await prefs.setString('last_module', 'scanpak');
 
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/scanpak/home');
@@ -115,7 +114,18 @@ class _ScanpakLoginScreenState extends State<ScanpakLoginScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Вхід до панелі адміністратора СканПак'),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            'Вхід до панелі адміністратора СканПак',
+            style: TextStyle(
+              color: _C.textDark,
+              fontWeight: FontWeight.w800,
+              fontSize: 17,
+            ),
+          ),
           content: TextField(
             controller: controller,
             obscureText: true,
@@ -131,6 +141,10 @@ class _ScanpakLoginScreenState extends State<ScanpakLoginScreen> {
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, controller.text.trim()),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _C.emerald,
+                foregroundColor: Colors.white,
+              ),
               child: const Text('Увійти'),
             ),
           ],
@@ -302,191 +316,825 @@ class _ScanpakLoginScreenState extends State<ScanpakLoginScreen> {
     super.dispose();
   }
 
-  Widget _buildLoginForm() {
-    return Column(
-      key: const ValueKey('login_form'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: _loginSurnameController,
-          textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(
-            labelText: 'Прізвище',
-            prefixIcon: Icon(Icons.person_outline),
-          ),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _loginPasswordController,
-          obscureText: true,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _handleLogin(),
-          decoration: const InputDecoration(
-            labelText: 'Пароль',
-            prefixIcon: Icon(Icons.lock_outline),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (_loginError != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              _loginError!,
-              style: const TextStyle(color: Colors.redAccent),
-            ),
-          ),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _isLoggingIn ? null : _handleLogin,
-            icon: _isLoggingIn
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.login),
-            label: Text(_isLoggingIn ? 'Зачекайте...' : 'Увійти'),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRegistrationForm() {
-    return Column(
-      key: const ValueKey('registration_form'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: _registerSurnameController,
-          textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(
-            labelText: 'Прізвище',
-            prefixIcon: Icon(Icons.person_add_alt_1),
-          ),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _registerPasswordController,
-          obscureText: true,
-          textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(
-            labelText: 'Пароль',
-            prefixIcon: Icon(Icons.lock),
-          ),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _registerConfirmController,
-          obscureText: true,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _handleRegistration(),
-          decoration: const InputDecoration(
-            labelText: 'Підтвердження пароля',
-            prefixIcon: Icon(Icons.lock_reset),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (_registerMessage != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              _registerMessage!,
-              style: TextStyle(
-                color: _registerSuccess ? Colors.green : Colors.redAccent,
-              ),
-            ),
-          ),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _isRegistering ? null : _handleRegistration,
-            icon: _isRegistering
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.person_add),
-            label: Text(_isRegistering ? 'Надсилання...' : 'Надіслати заявку'),
-          ),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final isCompact = width < 760;
-
     return Scaffold(
-      body: ResponsiveShell(
-        maxWidth: 980,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              alignment: WrapAlignment.spaceBetween,
-              children: [
-                OutlinedButton.icon(onPressed: () => Navigator.pushReplacementNamed(context, '/'), style: OutlinedButton.styleFrom(foregroundColor: Colors.white), icon: const Icon(Icons.arrow_back), label: const Text('Назад')),
-                FilledButton.tonalIcon(onPressed: _openAdminPanel, icon: const Icon(Icons.admin_panel_settings_outlined), label: const Text('Адмін панель')),
-              ],
-            ),
-            const SizedBox(height: 18),
-            GlassPanel(
-              padding: EdgeInsets.all(isCompact ? 20 : 32),
-              child: Wrap(
-                spacing: 28,
-                runSpacing: 24,
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  SizedBox(
-                    width: isCompact ? double.infinity : 330,
-                    child: Column(
-                      crossAxisAlignment: isCompact ? CrossAxisAlignment.center : CrossAxisAlignment.start,
-                      children: [
-                        Image.asset('assets/images/logo.png', width: isCompact ? 92 : 128, height: isCompact ? 92 : 128, errorBuilder: (_, __, ___) => const Icon(Icons.qr_code_2, size: 84, color: AppColors.blue)),
-                        const SizedBox(height: 18),
-                        Text('СканПак', textAlign: isCompact ? TextAlign.center : TextAlign.left, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, color: AppColors.navy)),
-                        const SizedBox(height: 10),
-                        Text('Корпоративный вход для учета посылок', textAlign: isCompact ? TextAlign.center : TextAlign.left, style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.slate, height: 1.45)),
-                      ],
-                    ),
-                  ),
-                  SizedBox(
-                    width: isCompact ? double.infinity : 470,
-                    child: SectionCard(
+      backgroundColor: _C.deepBlue,
+      resizeToAvoidBottomInset: false,
+      body: Stack(
+        children: [
+          const Positioned.fill(child: _Background()),
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final w = constraints.maxWidth;
+                final h = constraints.maxHeight;
+
+                final isVerySmall = h < 640;
+                final isSmall = h < 740;
+                final isNarrow = w < 380;
+
+                final hPad = isNarrow ? 16.0 : 24.0;
+                final contentWidth = math.min(w - hPad * 2, 440.0);
+
+                return Padding(
+                  padding: EdgeInsets.fromLTRB(hPad, 8, hPad, 12),
+                  child: Center(
+                    child: SizedBox(
+                      width: contentWidth,
                       child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.max,
                         children: [
-                          SegmentedButton<bool>(
-                            segments: const [ButtonSegment(value: false, label: Text('Вхід'), icon: Icon(Icons.login)), ButtonSegment(value: true, label: Text('Реєстрація'), icon: Icon(Icons.person_add_alt_1))],
-                            selected: {_isRegistrationMode},
-                            onSelectionChanged: (selection) { setState(() { _isRegistrationMode = selection.first; _loginError = null; _registerMessage = null; }); },
+                          _TopBar(
+                            onBack: () =>
+                                Navigator.pushReplacementNamed(context, '/'),
+                            onAdmin: _openAdminPanel,
                           ),
-                          const SizedBox(height: 24),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 250),
-                            transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: SizeTransition(sizeFactor: animation, child: child)),
-                            child: _isRegistrationMode ? _buildRegistrationForm() : _buildLoginForm(),
+
+                          SizedBox(height: isVerySmall ? 14 : 24),
+
+                          _Brand(compact: isVerySmall),
+
+                          SizedBox(height: isVerySmall ? 16 : 26),
+
+                          Flexible(
+                            child: _AuthCard(
+                              isRegistrationMode: _isRegistrationMode,
+                              compact: isVerySmall || isSmall,
+                              onModeChanged: (value) {
+                                setState(() {
+                                  _isRegistrationMode = value;
+                                  _loginError = null;
+                                  _registerMessage = null;
+                                });
+                              },
+                              child: _isRegistrationMode
+                                  ? _buildRegistrationForm(isVerySmall)
+                                  : _buildLoginForm(isVerySmall),
+                            ),
                           ),
+
+                          SizedBox(height: isVerySmall ? 8 : 14),
+
+                          const _Footer(),
                         ],
                       ),
                     ),
                   ),
-                ],
-              ),
+                );
+              },
             ),
-            const SizedBox(height: 18),
-            const Center(child: Text('by Dimon VR', style: TextStyle(color: Colors.white70, fontStyle: FontStyle.italic))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoginForm(bool compact) {
+    final gap = compact ? 12.0 : 16.0;
+    return Column(
+      key: const ValueKey('login_form'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _Field(
+          controller: _loginSurnameController,
+          label: 'Прізвище',
+          icon: Icons.person_outline,
+          textInputAction: TextInputAction.next,
+        ),
+        SizedBox(height: gap),
+        _Field(
+          controller: _loginPasswordController,
+          label: 'Пароль',
+          icon: Icons.lock_outline,
+          obscureText: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _handleLogin(),
+        ),
+        if (_loginError != null) ...[
+          const SizedBox(height: 12),
+          _MessageBox(text: _loginError!, isError: true),
+        ],
+        SizedBox(height: gap),
+        _PrimaryButton(
+          label: _isLoggingIn ? 'Зачекайте...' : 'Увійти',
+          icon: Icons.login_rounded,
+          loading: _isLoggingIn,
+          accent: _C.emerald,
+          soft: _C.mint,
+          onTap: _isLoggingIn ? null : _handleLogin,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRegistrationForm(bool compact) {
+    final gap = compact ? 12.0 : 16.0;
+    return Column(
+      key: const ValueKey('registration_form'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _Field(
+          controller: _registerSurnameController,
+          label: 'Прізвище',
+          icon: Icons.person_add_alt_1,
+          textInputAction: TextInputAction.next,
+        ),
+        SizedBox(height: gap),
+        _Field(
+          controller: _registerPasswordController,
+          label: 'Пароль',
+          icon: Icons.lock,
+          obscureText: true,
+          textInputAction: TextInputAction.next,
+        ),
+        SizedBox(height: gap),
+        _Field(
+          controller: _registerConfirmController,
+          label: 'Підтвердження пароля',
+          icon: Icons.lock_reset,
+          obscureText: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _handleRegistration(),
+        ),
+        if (_registerMessage != null) ...[
+          const SizedBox(height: 12),
+          _MessageBox(text: _registerMessage!, isError: !_registerSuccess),
+        ],
+        SizedBox(height: gap),
+        _PrimaryButton(
+          label: _isRegistering ? 'Надсилання...' : 'Надіслати заявку',
+          icon: Icons.person_add_rounded,
+          loading: _isRegistering,
+          accent: _C.emerald,
+          soft: _C.mint,
+          onTap: _isRegistering ? null : _handleRegistration,
+        ),
+      ],
+    );
+  }
+}
+
+// ───────────────────────── Palette ─────────────────────────
+
+class _C {
+  static const deepBlue = Color(0xFF07153A);
+  static const blue = Color(0xFF075BFF);
+  static const softBlue = Color(0xFF3F8CFF);
+  static const cyan = Color(0xFF04C8E8);
+  static const emerald = Color(0xFF14C9A6);
+  static const mint = Color(0xFF5EF2D0);
+  static const textDark = Color(0xFF0B1530);
+  static const textMuted = Color(0xFF60708C);
+  static const panel = Color(0xFFFFFFFF);
+  static const fieldBg = Color(0xFFF2F5FB);
+}
+
+// ───────────────────────── Top bar ─────────────────────────
+
+class _TopBar extends StatelessWidget {
+  final VoidCallback onBack;
+  final VoidCallback onAdmin;
+
+  const _TopBar({required this.onBack, required this.onAdmin});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _GhostButton(
+          icon: Icons.arrow_back_rounded,
+          label: 'Назад',
+          onTap: onBack,
+        ),
+        const Spacer(),
+        _GhostButton(
+          icon: Icons.admin_panel_settings_outlined,
+          label: 'Адмін',
+          onTap: onAdmin,
+        ),
+      ],
+    );
+  }
+}
+
+class _GhostButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _GhostButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(99),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(99),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(99),
+            border: Border.all(color: Colors.white.withOpacity(0.12)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 17, color: Colors.white.withOpacity(0.85)),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withOpacity(0.85),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ───────────────────────── Brand ─────────────────────────
+
+class _Brand extends StatelessWidget {
+  final bool compact;
+  const _Brand({required this.compact});
+
+  @override
+  Widget build(BuildContext context) {
+    final size = compact ? 60.0 : 72.0;
+    return Column(
+      children: [
+        Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [_C.mint, _C.emerald],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _C.emerald.withOpacity(0.45),
+                blurRadius: 26,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Icon(
+            Icons.inventory_2_rounded,
+            color: Colors.white,
+            size: compact ? 30 : 36,
+          ),
+        ),
+        SizedBox(height: compact ? 14 : 18),
+        Text(
+          'СканПак',
+          style: TextStyle(
+            fontSize: compact ? 24 : 28,
+            height: 1.0,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.5,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'ПАКУВАННЯ ПОСИЛОК',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 11,
+            height: 1.0,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 2.6,
+            color: Colors.white.withOpacity(0.55),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ───────────────────────── Auth card ─────────────────────────
+
+class _AuthCard extends StatelessWidget {
+  final bool isRegistrationMode;
+  final bool compact;
+  final ValueChanged<bool> onModeChanged;
+  final Widget child;
+
+  const _AuthCard({
+    required this.isRegistrationMode,
+    required this.compact,
+    required this.onModeChanged,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Container(
+        padding: EdgeInsets.all(compact ? 18 : 22),
+        decoration: BoxDecoration(
+          color: _C.panel,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+              color: _C.deepBlue.withOpacity(0.30),
+              blurRadius: 30,
+              offset: const Offset(0, 16),
+            ),
+            BoxShadow(
+              color: _C.emerald.withOpacity(0.12),
+              blurRadius: 22,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ModeSwitch(
+              isRegistration: isRegistrationMode,
+              onChanged: onModeChanged,
+            ),
+            SizedBox(height: compact ? 18 : 22),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SizeTransition(
+                  sizeFactor: animation,
+                  axisAlignment: -1,
+                  child: child,
+                ),
+              ),
+              child: child,
+            ),
           ],
         ),
       ),
     );
   }
+}
+
+// ───────────────────────── Mode switch ─────────────────────────
+
+class _ModeSwitch extends StatelessWidget {
+  final bool isRegistration;
+  final ValueChanged<bool> onChanged;
+
+  const _ModeSwitch({required this.isRegistration, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: _C.fieldBg,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          _SwitchTab(
+            label: 'Вхід',
+            icon: Icons.login_rounded,
+            selected: !isRegistration,
+            onTap: () => onChanged(false),
+          ),
+          _SwitchTab(
+            label: 'Реєстрація',
+            icon: Icons.person_add_alt_1,
+            selected: isRegistration,
+            onTap: () => onChanged(true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SwitchTab extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SwitchTab({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(11),
+            gradient: selected
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [_C.mint, _C.emerald],
+                  )
+                : null,
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: _C.emerald.withOpacity(0.35),
+                      blurRadius: 12,
+                      offset: const Offset(0, 5),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 17,
+                color: selected ? Colors.white : _C.textMuted,
+              ),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : _C.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ───────────────────────── Field ─────────────────────────
+
+class _Field extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final bool obscureText;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+
+  const _Field({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    this.obscureText = false,
+    this.textInputAction,
+    this.onSubmitted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      obscureText: obscureText,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
+      style: const TextStyle(
+        color: _C.textDark,
+        fontWeight: FontWeight.w600,
+        fontSize: 15,
+      ),
+      cursorColor: _C.emerald,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(
+          color: _C.textMuted,
+          fontWeight: FontWeight.w500,
+        ),
+        floatingLabelStyle: const TextStyle(
+          color: _C.emerald,
+          fontWeight: FontWeight.w700,
+        ),
+        prefixIcon: Icon(icon, color: _C.textMuted, size: 20),
+        filled: true,
+        fillColor: _C.fieldBg,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 16,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _C.emerald, width: 1.6),
+        ),
+      ),
+    );
+  }
+}
+
+// ───────────────────────── Message box ─────────────────────────
+
+class _MessageBox extends StatelessWidget {
+  final String text;
+  final bool isError;
+
+  const _MessageBox({required this.text, required this.isError});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isError ? const Color(0xFFE5484D) : _C.emerald;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.30)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isError ? Icons.error_outline_rounded : Icons.check_circle_outline,
+            size: 18,
+            color: color,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.3,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ───────────────────────── Primary button ─────────────────────────
+
+class _PrimaryButton extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final bool loading;
+  final Color accent;
+  final Color soft;
+  final VoidCallback? onTap;
+
+  const _PrimaryButton({
+    required this.label,
+    required this.icon,
+    required this.loading,
+    required this.accent,
+    required this.soft,
+    required this.onTap,
+  });
+
+  @override
+  State<_PrimaryButton> createState() => _PrimaryButtonState();
+}
+
+class _PrimaryButtonState extends State<_PrimaryButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onTap != null;
+
+    return GestureDetector(
+      onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+      onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+      onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.975 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: AnimatedOpacity(
+          opacity: enabled ? 1.0 : 0.7,
+          duration: const Duration(milliseconds: 160),
+          child: Container(
+            width: double.infinity,
+            height: 52,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(15),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [widget.soft, widget.accent],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: widget.accent.withOpacity(0.40),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (widget.loading)
+                  const SizedBox(
+                    width: 19,
+                    height: 19,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      valueColor: AlwaysStoppedAnimation(Colors.white),
+                    ),
+                  )
+                else
+                  Icon(widget.icon, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Text(
+                  widget.label,
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ───────────────────────── Footer ─────────────────────────
+
+class _Footer extends StatelessWidget {
+  const _Footer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'by Dimon VR · DC Link',
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w500,
+        fontStyle: FontStyle.italic,
+        letterSpacing: 0.3,
+        color: Colors.white.withOpacity(0.4),
+      ),
+    );
+  }
+}
+
+// ───────────────────────── Background ─────────────────────────
+
+class _Background extends StatelessWidget {
+  const _Background();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: const [
+                  Color(0xFF06122F),
+                  Color(0xFF07306E),
+                  Color(0xFF0A7D8C),
+                  Color(0xFF0FC9A6),
+                ],
+                stops: const [0.0, 0.4, 0.75, 1.0],
+              ),
+            ),
+          ),
+        ),
+        const Positioned.fill(
+          child: CustomPaint(painter: _MeshPainter()),
+        ),
+        Positioned(
+          left: -130,
+          top: -120,
+          child: _Glow(size: 320, color: _C.cyan.withOpacity(0.30)),
+        ),
+        Positioned(
+          right: -150,
+          bottom: -130,
+          child: _Glow(size: 400, color: _C.mint.withOpacity(0.30)),
+        ),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  _C.deepBlue.withOpacity(0.35),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.4],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Glow extends StatelessWidget {
+  final double size;
+  final Color color;
+
+  const _Glow({required this.size, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [color, color.withOpacity(0)],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MeshPainter extends CustomPainter {
+  const _MeshPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final linePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = Colors.white.withOpacity(0.04);
+
+    const step = 46.0;
+
+    for (double x = -size.height; x < size.width; x += step * 2) {
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x + size.height, size.height),
+        linePaint,
+      );
+    }
+
+    final dotPaint = Paint()..style = PaintingStyle.fill;
+    for (double x = 24; x < size.width; x += step) {
+      for (double y = 24; y < size.height; y += step) {
+        final fade = 1 - (y / size.height);
+        dotPaint.color = Colors.white.withOpacity(0.03 * fade);
+        canvas.drawCircle(Offset(x, y), 1.1, dotPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
