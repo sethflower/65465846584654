@@ -8,6 +8,8 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_design.dart';
+
 import 'utils/scanpak_auth.dart';
 import 'utils/scanpak_offline_queue.dart';
 import 'utils/scanpak_user_management.dart';
@@ -543,7 +545,7 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
           children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              color: _isOnline ? Colors.green.shade600 : Colors.red.shade600,
+              color: _isOnline ? AppColors.emerald : Colors.redAccent,
               padding: const EdgeInsets.all(6),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -596,13 +598,9 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
             ),
           ),
           const SizedBox(height: 24),
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+          SectionCard(
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: EdgeInsets.zero,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -728,11 +726,7 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
                     final date = DateFormat('dd.MM.yyyy').format(localTime);
                     final time = DateFormat('HH:mm').format(localTime);
 
-                    return Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 1,
+                    return SectionCard(
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
                         child: Column(
@@ -742,7 +736,7 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
                               children: [
                                 const Icon(
                                   Icons.inventory_2,
-                                  color: Colors.blue,
+                                  color: AppColors.blue,
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
@@ -917,10 +911,7 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
                   ],
                 ),
                 const SizedBox(height: 16),
-                Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                SectionCard(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
@@ -962,10 +953,7 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
                   ),
                 ),
                 const SizedBox(height: 12),
-                Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                SectionCard(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
@@ -1041,9 +1029,8 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
   }) {
     return SizedBox(
       width: 220,
-      child: Card(
-        color: color.withOpacity(0.08),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.18))),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(

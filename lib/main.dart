@@ -11,6 +11,7 @@ import 'username_screen.dart';
 import 'history_screen.dart';
 import 'errors_screen.dart';
 import 'statistics_screen.dart';
+import 'app_design.dart';
 import 'admin_panel_screen.dart';
 import 'utils/offline_queue.dart'; // ✅ офлайн-очередь
 import 'utils/scanpak_offline_queue.dart';
@@ -52,7 +53,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'TrackingApp',
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
+      theme: CorporateTheme.light(),
 
       // ✅ Локализация — для корректного отображения дат и кнопок
       localizationsDelegates: const [

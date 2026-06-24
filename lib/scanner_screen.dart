@@ -5,6 +5,7 @@ import 'package:flutter_barcode_listener/flutter_barcode_listener.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'app_design.dart';
 import 'camera_scanner_page.dart';
 import 'utils/access_utils.dart';
 import 'utils/offline_queue.dart';
@@ -277,263 +278,120 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isCompact = width < 720;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       body: BarcodeKeyboardListener(
         bufferDuration: const Duration(milliseconds: 200),
         onBarcodeScanned: _handleScannedCode,
         child: SafeArea(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 🔹 Индикатор состояния сети
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                color: _isOnline ? Colors.green.shade600 : Colors.red.shade600,
-                padding: const EdgeInsets.all(6),
-                child: Text(
-                  _isOnline
-                      ? '🟢 Підключення активне'
-                      : '🔴 Немає зв’язку з сервером',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-
-              // Панель состояния
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(
+                  horizontal: isCompact ? 14 : 28,
+                  vertical: 14,
                 ),
                 decoration: const BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
+                  gradient: LinearGradient(
+                    colors: [AppColors.navy, AppColors.blue],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.person, color: Colors.blueAccent),
-                        const SizedBox(width: 8),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Оператор: $_userName',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
+                        const Icon(Icons.qr_code_scanner, color: Colors.white),
+                        const SizedBox(width: 10),
+                        Text(
+                          'TrackingApp',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
                               ),
-                            ),
-                            Text(
-                              _roleLabel,
-                              style: TextStyle(
-                                color: _roleColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
                         ),
                       ],
                     ),
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        const Icon(Icons.qr_code_scanner, color: Colors.green),
-                        const SizedBox(width: 8),
-                        Text(
-                          _boxFocus.hasFocus ? 'BoxID' : 'ТТН',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: _boxFocus.hasFocus
-                                ? Colors.blueAccent
-                                : Colors.orange,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        StatusPill(
+                          label: _isOnline ? 'Онлайн' : 'Офлайн',
+                          icon: _isOnline ? Icons.wifi : Icons.wifi_off,
+                          color: _isOnline ? AppColors.emerald : Colors.redAccent,
                         ),
+                        StatusPill(label: _roleLabel.isEmpty ? 'Оператор' : _roleLabel, icon: Icons.verified_user_outlined, color: _roleColor),
                       ],
                     ),
                   ],
                 ),
               ),
-
-              // Кнопки
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.camera_alt_outlined,
-                      color: Colors.teal,
-                    ),
-                    tooltip: 'Сканувати камерою',
-                    onPressed: _openCameraScanner,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.history, color: Colors.blueAccent),
-                    tooltip: 'Переглянути історію',
-                    onPressed: () => Navigator.pushNamed(context, '/history'),
-                  ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.error_outline,
-                      color: Colors.orangeAccent,
-                    ),
-                    tooltip: 'Переглянути помилки',
-                    onPressed: () => Navigator.pushNamed(context, '/errors'),
-                  ),
-                  if (_isAdmin)
-                    IconButton(
-                      icon: const Icon(
-                        Icons.insights,
-                        color: Colors.deepPurpleAccent,
+              Padding(
+                padding: EdgeInsets.fromLTRB(isCompact ? 12 : 24, 12, isCompact ? 12 : 24, 0),
+                child: SectionCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      StatusPill(label: 'Оператор: $_userName', icon: Icons.person, color: AppColors.blue),
+                      StatusPill(label: _boxFocus.hasFocus ? 'Сканируется BoxID' : 'Сканируется ТТН', icon: Icons.center_focus_strong, color: _boxFocus.hasFocus ? AppColors.blue : AppColors.amber),
+                      Wrap(
+                        spacing: 4,
+                        children: [
+                          IconButton.filledTonal(icon: const Icon(Icons.camera_alt_outlined), tooltip: 'Сканувати камерою', onPressed: _openCameraScanner),
+                          IconButton.filledTonal(icon: const Icon(Icons.history), tooltip: 'Переглянути історію', onPressed: () => Navigator.pushNamed(context, '/history')),
+                          IconButton.filledTonal(icon: const Icon(Icons.error_outline), tooltip: 'Переглянути помилки', onPressed: () => Navigator.pushNamed(context, '/errors')),
+                          if (_isAdmin) IconButton.filledTonal(icon: const Icon(Icons.insights), tooltip: 'Переглянути статистику', onPressed: () => Navigator.pushNamed(context, '/statistics')),
+                          IconButton.filledTonal(icon: const Icon(Icons.logout), tooltip: 'Вийти', onPressed: () async {
+                            final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text('Підтвердження виходу'), content: const Text('Ви впевнені, що хочете вийти з акаунту?'), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Скасувати')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Вийти'))]));
+                            if (confirm == true) {
+                              final prefs = await SharedPreferences.getInstance();
+                              for (final key in const {'token', 'access_level', 'user_name', 'user_role'}) { await prefs.remove(key); }
+                              if (context.mounted) Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+                            }
+                          }),
+                        ],
                       ),
-                      tooltip: 'Переглянути статистику',
-                      onPressed: () =>
-                          Navigator.pushNamed(context, '/statistics'),
-                    ),
-                  IconButton(
-                    icon: const Icon(Icons.logout, color: Colors.redAccent),
-                    tooltip: 'Вийти з акаунту',
-                    onPressed: () async {
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('Підтвердження виходу'),
-                          content: const Text(
-                            'Ви впевнені, що хочете вийти з акаунту?',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, false),
-                              child: const Text('Скасувати'),
-                            ),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.redAccent,
-                              ),
-                              onPressed: () => Navigator.pop(ctx, true),
-                              child: const Text('Вийти'),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (confirm == true) {
-                        final prefs = await SharedPreferences.getInstance();
-                        const keysToClear = <String>{
-                          'token',
-                          'access_level',
-                          'user_name',
-                          'user_role',
-                        };
-                        for (final key in keysToClear) {
-                          await prefs.remove(key);
-                        }
-                        if (context.mounted) {
-                          Navigator.pushNamedAndRemoveUntil(
-                            context,
-                            '/',
-                            (route) => false,
-                          );
-                        }
-                      }
-                    },
+                    ],
                   ),
-                ],
+                ),
               ),
-
-
-              // Основная часть
               Expanded(
                 child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (_inFlightSends > 0)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 24.0),
-                            child: Column(
-                              children: [
-                                LinearProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation(
-                                    Colors.green.shade600,
-                                  ),
-                                  backgroundColor: Colors.green.shade100,
-                                ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Фонова відправка: $_inFlightSends',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        Text(
-                          'Сканування BoxID → ТТН',
-                          style: const TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 40),
-                        Column(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.all(isCompact ? 16 : 28),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 760),
+                      child: SectionCard(
+                        padding: EdgeInsets.all(isCompact ? 18 : 28),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            TextField(
-                              controller: _boxController,
-                              focusNode: _boxFocus,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 20),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              decoration: const InputDecoration(
-                                border: OutlineInputBorder(),
-                                labelText: 'BoxID',
-                                hintText: 'Введіть або відскануйте BoxID',
-                              ),
-                              onSubmitted: _handleBoxSubmitted,
-                            ),
+                            Text('Сканирование BoxID → ТТН', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, color: AppColors.navy)),
+                            const SizedBox(height: 10),
+                            Text('Сканируйте два значения подряд. После успешной отправки форма автоматически готова к следующей операции.', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.slate)),
+                            if (_inFlightSends > 0) ...[const SizedBox(height: 20), LinearProgressIndicator(color: AppColors.emerald), const SizedBox(height: 8), Text('Фонова відправка: $_inFlightSends', textAlign: TextAlign.center)],
                             const SizedBox(height: 24),
-                            TextField(
-                              controller: _ttnController,
-                              focusNode: _ttnFocus,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 20),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              decoration: const InputDecoration(
-                                border: OutlineInputBorder(),
-                                labelText: 'ТТН',
-                                hintText: 'Введіть або відскануйте ТТН',
-                              ),
-                              onSubmitted: _handleTtnSubmitted,
-                            ),
+                            TextField(controller: _boxController, focusNode: _boxFocus, textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800), inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: const InputDecoration(labelText: 'BoxID', hintText: 'Введіть або відскануйте BoxID', prefixIcon: Icon(Icons.inventory_2_outlined)), onSubmitted: _handleBoxSubmitted),
+                            const SizedBox(height: 18),
+                            TextField(controller: _ttnController, focusNode: _ttnFocus, textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800), inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: const InputDecoration(labelText: 'ТТН', hintText: 'Введіть або відскануйте ТТН', prefixIcon: Icon(Icons.local_shipping_outlined)), onSubmitted: _handleTtnSubmitted),
+                            if (_status.isNotEmpty) ...[const SizedBox(height: 22), StatusPill(label: _status, icon: Icons.info_outline, color: _status.contains('Успішно') ? AppColors.emerald : AppColors.amber)],
                           ],
                         ),
-                        const SizedBox(height: 32),
-                        Text(
-                          _status,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -543,5 +401,4 @@ class _ScannerScreenState extends State<ScannerScreen> {
         ),
       ),
     );
-  }
-}
+  }}

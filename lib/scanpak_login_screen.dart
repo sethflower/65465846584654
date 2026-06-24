@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_design.dart';
+
 import 'scanpak_admin_panel_screen.dart';
 import 'utils/scanpak_auth.dart';
 import 'utils/scanpak_user_management.dart';
@@ -416,129 +418,73 @@ class _ScanpakLoginScreenState extends State<ScanpakLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isCompact = width < 760;
+
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF90caf9), Color(0xFF1565C0)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+      body: ResponsiveShell(
+        maxWidth: 980,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.spaceBetween,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: () =>
-                          Navigator.pushReplacementNamed(context, '/'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.2),
-                        foregroundColor: Colors.white,
-                      ),
-                      icon: const Icon(Icons.arrow_back),
-                      label: const Text('Назад'),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: _openAdminPanel,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.2),
-                        foregroundColor: Colors.white,
-                      ),
-                      icon: const Icon(Icons.admin_panel_settings_outlined),
-                      label: const Text('Адмін панель'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Card(
-                  color: Colors.white.withOpacity(0.9),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
+                OutlinedButton.icon(onPressed: () => Navigator.pushReplacementNamed(context, '/'), style: OutlinedButton.styleFrom(foregroundColor: Colors.white), icon: const Icon(Icons.arrow_back), label: const Text('Назад')),
+                FilledButton.tonalIcon(onPressed: _openAdminPanel, icon: const Icon(Icons.admin_panel_settings_outlined), label: const Text('Адмін панель')),
+              ],
+            ),
+            const SizedBox(height: 18),
+            GlassPanel(
+              padding: EdgeInsets.all(isCompact ? 20 : 32),
+              child: Wrap(
+                spacing: 28,
+                runSpacing: 24,
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: isCompact ? double.infinity : 330,
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: isCompact ? CrossAxisAlignment.center : CrossAxisAlignment.start,
                       children: [
-                        Image.asset(
-                          'assets/images/logo.png',
-                          width: 140,
-                          height: 140,
-                          errorBuilder: (_, __, ___) => const Icon(
-                            Icons.qr_code_2,
-                            size: 80,
-                            color: Colors.blueGrey,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'СканПак',
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 24),
-                        ToggleButtons(
-                          borderRadius: BorderRadius.circular(12),
-                          constraints: const BoxConstraints(minHeight: 40),
-                          isSelected: [
-                            !_isRegistrationMode,
-                            _isRegistrationMode,
-                          ],
-                          onPressed: (index) {
-                            setState(() {
-                              _isRegistrationMode = index == 1;
-                              _loginError = null;
-                              _registerMessage = null;
-                            });
-                          },
-                          children: const [
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 24),
-                              child: Text('Вхід'),
-                            ),
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 24),
-                              child: Text('Реєстрація'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 250),
-                          transitionBuilder: (child, animation) =>
-                              FadeTransition(
-                                opacity: animation,
-                                child: SizeTransition(
-                                  sizeFactor: animation,
-                                  child: child,
-                                ),
-                              ),
-                          child: _isRegistrationMode
-                              ? _buildRegistrationForm()
-                              : _buildLoginForm(),
-                        ),
+                        Image.asset('assets/images/logo.png', width: isCompact ? 92 : 128, height: isCompact ? 92 : 128, errorBuilder: (_, __, ___) => const Icon(Icons.qr_code_2, size: 84, color: AppColors.blue)),
+                        const SizedBox(height: 18),
+                        Text('СканПак', textAlign: isCompact ? TextAlign.center : TextAlign.left, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, color: AppColors.navy)),
+                        const SizedBox(height: 10),
+                        Text('Корпоративный вход для учета посылок', textAlign: isCompact ? TextAlign.center : TextAlign.left, style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.slate, height: 1.45)),
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 32),
-                const Text(
-                  'by Dimon VR',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                    fontStyle: FontStyle.italic,
+                  SizedBox(
+                    width: isCompact ? double.infinity : 470,
+                    child: SectionCard(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SegmentedButton<bool>(
+                            segments: const [ButtonSegment(value: false, label: Text('Вхід'), icon: Icon(Icons.login)), ButtonSegment(value: true, label: Text('Реєстрація'), icon: Icon(Icons.person_add_alt_1))],
+                            selected: {_isRegistrationMode},
+                            onSelectionChanged: (selection) { setState(() { _isRegistrationMode = selection.first; _loginError = null; _registerMessage = null; }); },
+                          ),
+                          const SizedBox(height: 24),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: SizeTransition(sizeFactor: animation, child: child)),
+                            child: _isRegistrationMode ? _buildRegistrationForm() : _buildLoginForm(),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+            const SizedBox(height: 18),
+            const Center(child: Text('by Dimon VR', style: TextStyle(color: Colors.white70, fontStyle: FontStyle.italic))),
+          ],
         ),
       ),
     );
