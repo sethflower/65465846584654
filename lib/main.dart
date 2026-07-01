@@ -16,6 +16,7 @@ import 'statistics_screen.dart';
 import 'admin_panel_screen.dart';
 import 'utils/offline_queue.dart'; // ✅ офлайн-очередь
 import 'utils/scanpak_offline_queue.dart';
+import 'widgets/app_update_gate.dart';
 
 class DclinkHttpOverrides extends HttpOverrides {
   @override
@@ -121,6 +122,13 @@ class MyApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const [Locale('uk', 'UA'), Locale('en', 'US')],
+
+      
+      builder: (context, child) {
+        return AppUpdateGate(
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
 
       // ✅ При запуске сначала проверяем сохранённую сессию
       initialRoute: '/',

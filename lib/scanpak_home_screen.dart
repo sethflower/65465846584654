@@ -253,7 +253,7 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
       setState(() {
         _records = <_ScanpakRecord>[record, ..._records];
         _status =
-            'Збережено для ${record.user} о ${DateFormat('HH:mm').format(record.timestamp.toLocal())}';
+            'Збережено для ${record.user} о ${DateFormat('HH:mm').format(record.timestamp)}';
       });
       _playSuccessSound();
       _applyFilters();
@@ -339,7 +339,7 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
 
     if (_selectedDate != null) {
       filtered = filtered.where((r) {
-        final local = r.timestamp.toLocal();
+        final local = r.timestamp;
         return local.year == _selectedDate!.year &&
             local.month == _selectedDate!.month &&
             local.day == _selectedDate!.day;
@@ -348,7 +348,7 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
 
     if (_startTime != null || _endTime != null) {
       filtered = filtered.where((r) {
-        final local = r.timestamp.toLocal();
+        final local = r.timestamp;
         final time = TimeOfDay.fromDateTime(local);
 
         bool afterStart = true;
@@ -393,8 +393,8 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
       );
       filtered = filtered
           .where((r) =>
-              r.timestamp.toLocal().isAfter(start) ||
-              r.timestamp.toLocal().isAtSameMomentAs(start))
+              r.timestamp.isAfter(start) ||
+              r.timestamp.isAtSameMomentAs(start))
           .toList();
     }
 
@@ -405,7 +405,7 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
         _statsEndDate!.day + 1,
       );
       filtered =
-          filtered.where((r) => r.timestamp.toLocal().isBefore(end)).toList();
+          filtered.where((r) => r.timestamp.isBefore(end)).toList();
     }
 
     filtered.sort((a, b) => b.timestamp.compareTo(a.timestamp));
@@ -417,9 +417,9 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
       userCounts.update(record.user, (value) => value + 1, ifAbsent: () => 1);
 
       final dateKey = DateTime(
-        record.timestamp.toLocal().year,
-        record.timestamp.toLocal().month,
-        record.timestamp.toLocal().day,
+        record.timestamp.year,
+        record.timestamp.month,
+        record.timestamp.day,
       );
       dailyCounts.update(dateKey, (value) => value + 1, ifAbsent: () => 1);
     }
@@ -719,7 +719,7 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
                       separatorBuilder: (_, __) => const SizedBox(height: 10),
                       itemBuilder: (context, index) {
                         final record = _filteredRecords[index];
-                        final localTime = record.timestamp.toLocal();
+                        final localTime = record.timestamp;
                         final date =
                             DateFormat('dd.MM.yyyy').format(localTime);
                         final time = DateFormat('HH:mm').format(localTime);
@@ -833,7 +833,7 @@ class _ScanpakHomeScreenState extends State<ScanpakHomeScreen>
                 value: _latestStatsRecord == null
                     ? '—'
                     : DateFormat('dd.MM • HH:mm')
-                        .format(_latestStatsRecord!.timestamp.toLocal()),
+                        .format(_latestStatsRecord!.timestamp),
                 icon: Icons.access_time,
                 color: _C.softBlue,
               ),
@@ -1905,27 +1905,17 @@ class _ScanpakRecord {
   }
 
   static DateTime _parseTimestamp(String raw) {
-    final parsed = DateTime.tryParse(raw.trim());
+    final value = raw.trim();
+    final parsed = DateTime.tryParse(value);
+
     if (parsed == null) {
       throw const FormatException('Некоректні дані сканування');
     }
 
-    final hasTimezone =
-        RegExp(r'(Z|[+-]\d{2}:?\d{2})$').hasMatch(raw.trim());
-    final utcTime = hasTimezone
-        ? parsed.toUtc()
-        : DateTime.utc(
-            parsed.year,
-            parsed.month,
-            parsed.day,
-            parsed.hour,
-            parsed.minute,
-            parsed.second,
-            parsed.millisecond,
-            parsed.microsecond,
-          );
-
-    return utcTime.toLocal();
+    // Backend уже отдаёт локальное время сканирования.
+    // Поэтому здесь не добавляем Z, не переводим в UTC и не вызываем toLocal(),
+    // чтобы не получать сдвиг времени на +3 часа.
+    return parsed;
   }
 
   static _ScanpakRecord fromResponse(String raw) {
